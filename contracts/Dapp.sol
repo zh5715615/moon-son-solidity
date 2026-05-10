@@ -28,7 +28,6 @@ contract Dapp is Ownable, ReentrancyGuard {
     struct UserInfo {
         uint256 rankReward;         // 排行奖励
         uint256 replenishReward;    // 回补奖励
-        bool exists;                // 用户是否存在
     }
 
     uint constant FEW_PERSON_ROOM = 3;   //少人房人数
@@ -95,6 +94,7 @@ contract Dapp is Ownable, ReentrancyGuard {
         require(currentAllowance >= roomAmount, "Token allowance is not enough");
 
         SafeERC20.safeTransferFrom(dpegToken, msg.sender, rankPoolAddress, rankRewardAmount);
+        // TODO 这里要去pancake上把replenishRewardAmount个dpegToken换成usdtToken，然后转到replenishPoolAddress；
         SafeERC20.safeTransferFrom(dpegToken, msg.sender, replenishPoolAddress, replenishRewardAmount);
         SafeERC20.safeTransferFrom(dpegToken, msg.sender, blackHoleAddress, destroyAmount);
         SafeERC20.safeTransferFrom(dpegToken, msg.sender, address(this), remainingAmount);
@@ -105,7 +105,7 @@ contract Dapp is Ownable, ReentrancyGuard {
         }
     }
 
-    function sendReward(uint level, address winner, address[] memory directUser, address[] memory indirectUser) public onlyOwner {
+    function sendInstantReward(uint level, address winner, address[] memory directUser, address[] memory indirectUser) public onlyOwner {
         require(level >= 0 && level < 12, "Invalid room level");
         require(winner != address(0), "Winner address is zero");
 
@@ -138,37 +138,51 @@ contract Dapp is Ownable, ReentrancyGuard {
         rooms[level].currentUserNumber = 0;
     }
 
-    // function buySpaceJediPackage(uint buyCnt) public nonReentrant {
-    //     require(buyCnt > 0, "buyCnt must be greater than 0");
-    //     require(block.timestamp <= presaleBeginTimestamp + presaleDuration, "The pre-sale has ended");
-    //     uint userOwnCnt = userPackageCnt[msg.sender];
-    //     require(packageCnt < 2000, "All packages have been sold out");
-    //     require(userOwnCnt + buyCnt <= 5, "Each address can only buy up to 5 packages");
-    //     (, uint256 price, uint stage) = getPackageCnt();
-    //     if (stage == 1 && packageCnt + buyCnt > SELL_SJ_STAGE_1_COUNT) {
-    //         buyCnt = SELL_SJ_STAGE_1_COUNT - packageCnt;
-    //     }
-    //     if (stage == 2 && packageCnt + buyCnt > SELL_SJ_STAGE_2_COUNT) {
-    //         buyCnt = SELL_SJ_STAGE_2_COUNT - packageCnt;
-    //     }
-    //     if (stage == 3 && packageCnt + buyCnt > SELL_SJ_STAGE_3_COUNT) {
-    //         buyCnt = SELL_SJ_STAGE_3_COUNT - packageCnt;
-    //     }
-    //     if (stage == 4 && packageCnt + buyCnt > SELL_SJ_STAGE_4_COUNT) {
-    //         buyCnt = SELL_SJ_STAGE_4_COUNT - packageCnt;
-    //     }
-    //     if (stage == 5 && packageCnt + buyCnt > SELL_SJ_STAGE_5_COUNT) {
-    //         buyCnt = SELL_SJ_STAGE_5_COUNT - packageCnt;
-    //     }
-    //     uint256 packageSjNumber = 1350;
-    //     uint256 totalCost = packageSjNumber * price * buyCnt;
-    //     require(usdtToken.balanceOf(msg.sender) >= totalCost, "Insufficient USDT balance");
-    //     require(usdtToken.allowance(msg.sender, address(this)) >= totalCost, "Insufficient allowance");
-    //     SafeERC20.safeTransferFrom(usdtToken, msg.sender, address(this), totalCost);
-    //     SafeERC20.safeTransfer(spaceJediToken, msg.sender, buyCnt * packageSjNumber * (10 ** sjTokenDecimals));
-    //     packageCnt += buyCnt;
-    //     userPackageCnt[msg.sender] += buyCnt;
-    //     emit BuySpaceJediPackage(msg.sender, buyCnt, totalCost, price, stage);
-    // }
+    function sendRankReward(address[] memory rankUsers, uint256[] memory rewardAmounts) public onlyOwner {
+        require(rankUsers.length <= 10, "Rank user list too long");
+        require(rewardAmounts.length <= 10, "Reward amount list too long");
+        require(rankUsers.length == rewardAmounts.length, "Rank user list is not eq Reward amount list");
 
+        for (uint i = 0; i < rankUsers.length; i++) {
+            require(rankUsers[i] != address(0), "Rank user address is zero");
+            userReward[rankUsers[i]].rankReward += rewardAmounts[i];
+        }
+    }
+
+    function getRewardAmount(address user) public view returns (uint256, uint256) {
+        return (userReward[user].rankReward, userReward[user].replenishReward);
+    }
+
+    function withdrawRankReward() public nonReentrant {
+        UserInfo storage userInfo = userReward[msg.sender];
+        require(userInfo.rankReward > 0, "Rank reward is zero");
+        userReward[msg.sender].rankReward = 0;
+        uint256 poolBalance = IERC20(dpegToken).balanceOf(rankPoolAddress);
+        require(poolBalance >= userInfo.rankReward, "User rank reward amount large of pool balance");
+        uint256 poolAllowance = IERC20(dpegToken).allowance(rankPoolAddress, address(this));
+        require(poolAllowance >= userInfo.rankReward, "Rank pool allowance is not enough");
+        SafeERC20.safeTransferFrom(dpegToken, rankPoolAddress, msg.sender, userInfo.rankReward);
+    }
+
+    function sendreplenishReward(address[] memory replenishUsers, uint256[] memory rewardAmounts) public onlyOwner {
+        require(replenishUsers.length <= 20, "Replenish user list too long");
+        require(rewardAmounts.length <= 20, "Replenish amount list too long");
+        require(replenishUsers.length == rewardAmounts.length, "Replenish user list is not eq Replenish amount list");
+
+        for (uint i = 0; i < replenishUsers.length; i++) {
+            require(replenishUsers[i] != address(0), "Replenish user address is zero"); 
+            userReward[replenishUsers[i]].replenishReward += rewardAmounts[i];
+        }
+    }
+
+    function withdrawReplenishReward() public {
+        UserInfo storage userInfo = userReward[msg.sender];
+        require(userInfo.replenishReward > 0, "Replenish reward is zero");
+        userReward[msg.sender].replenishReward = 0;
+        uint256 poolBalance = IERC20(usdtToken).balanceOf(replenishPoolAddress);
+        require(poolBalance >= userInfo.replenishReward, "User replenish reward amount large of pool balance");
+        uint256 poolAllowance = IERC20(usdtToken).allowance(replenishPoolAddress, address(this));
+        require(poolAllowance >= userInfo.replenishReward, "Replenish pool allowance is not enough");
+        SafeERC20.safeTransferFrom(usdtToken, replenishPoolAddress, msg.sender, userInfo.replenishReward);
+    }
 }
