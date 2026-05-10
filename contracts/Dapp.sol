@@ -117,13 +117,10 @@ contract Dapp is Ownable, ReentrancyGuard {
         uint256 totalAmount = roomAmount * userCapacity;
 
         uint256 winnerReward = totalAmount * 70 / 100;
-        uint256 promoteReward = roomAmount * 5 / 100;
         uint256 directReward = roomAmount * 3 / 100;
-        uint256 indirectReward = promoteReward - directReward;
+        uint256 indirectReward = roomAmount * 2 / 100;
 
-        uint256 totalDirectReward = directReward * directUser.length;
-        uint256 totalIndirectReward = indirectReward * indirectUser.length;
-        uint256 requiredBalance = winnerReward + totalDirectReward + totalIndirectReward;
+        uint256 requiredBalance = winnerReward + directReward * directUser.length + indirectReward * indirectUser.length;
         uint256 contractBalance = IERC20(dpegToken).balanceOf(address(this));
         require(contractBalance >= requiredBalance, "Contract token balance is not enough");
 
