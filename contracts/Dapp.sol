@@ -51,6 +51,10 @@ contract Dapp is Ownable, ReentrancyGuard {
 
     mapping(address => UserInfo) userReward;
 
+    event UserEnteredRoom(address indexed user, uint indexed level, uint256 amount);
+    event RankRewardWithdrawn(address indexed user, uint256 amount);
+    event ReplenishRewardWithdrawn(address indexed user, uint256 amount);
+
     constructor(address beneficiary, address _rankPoolAddress, address _replenishPoolAddress, 
                 address _usdtAddress, address _dpegAddress) payable Ownable(beneficiary) {
         rankPoolAddress = _rankPoolAddress;
@@ -103,6 +107,7 @@ contract Dapp is Ownable, ReentrancyGuard {
         } else {
             rooms[level].enable = false;
         }
+        emit UserEnteredRoom(msg.sender, level, roomAmount);
     }
 
     function sendInstantReward(uint level, address winner, address[] memory directUser, address[] memory indirectUser) public onlyOwner {
@@ -162,6 +167,7 @@ contract Dapp is Ownable, ReentrancyGuard {
         uint256 poolAllowance = IERC20(dpegToken).allowance(rankPoolAddress, address(this));
         require(poolAllowance >= userInfo.rankReward, "Rank pool allowance is not enough");
         SafeERC20.safeTransferFrom(dpegToken, rankPoolAddress, msg.sender, userInfo.rankReward);
+        emit RankRewardWithdrawn(msg.sender, userInfo.rankReward);
     }
 
     function sendreplenishReward(address[] memory replenishUsers, uint256[] memory rewardAmounts) public onlyOwner {
@@ -184,5 +190,6 @@ contract Dapp is Ownable, ReentrancyGuard {
         uint256 poolAllowance = IERC20(usdtToken).allowance(replenishPoolAddress, address(this));
         require(poolAllowance >= userInfo.replenishReward, "Replenish pool allowance is not enough");
         SafeERC20.safeTransferFrom(usdtToken, replenishPoolAddress, msg.sender, userInfo.replenishReward);
+        emit ReplenishRewardWithdrawn(msg.sender, userInfo.replenishReward);
     }
 }
