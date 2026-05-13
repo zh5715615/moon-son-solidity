@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
 contract Dapp is Ownable, ReentrancyGuard {
 
@@ -21,8 +23,11 @@ contract Dapp is Ownable, ReentrancyGuard {
     IERC20Metadata public dpegToken;
     address public dpegTokenAddress;
 
+    address constant pancakeRouterAddress = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+
+    IUniswapV2Router02 public router = IUniswapV2Router02(pancakeRouterAddress);
+
     address rankPoolAddress;           //排行榜资金地址
-    address replenishPoolAddress;      //回补池资金地址
     address constant blackHoleAddress = 0x000000000000000000000000000000000000dEaD;          //黑洞地址
 
     struct UserInfo {
@@ -55,10 +60,9 @@ contract Dapp is Ownable, ReentrancyGuard {
     event RankRewardWithdrawn(address indexed user, uint256 amount);
     event ReplenishRewardWithdrawn(address indexed user, uint256 amount);
 
-    constructor(address beneficiary, address _rankPoolAddress, address _replenishPoolAddress, 
+    constructor(address beneficiary, address _rankPoolAddress, 
                 address _usdtAddress, address _dpegAddress) payable Ownable(beneficiary) {
         rankPoolAddress = _rankPoolAddress;
-        replenishPoolAddress = _replenishPoolAddress;
         
         usdtToken = IERC20Metadata(_usdtAddress);
         usdtTokenAddress = _usdtAddress;
@@ -80,37 +84,99 @@ contract Dapp is Ownable, ReentrancyGuard {
         rooms[9] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_4 * dpegTokenDecimals, 0, true);
         rooms[10] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_5 * dpegTokenDecimals, 0, true);
         rooms[11] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_6 * dpegTokenDecimals, 0, true);
+
+        usdtToken.approve(pancakeRouterAddress, 100000000000 * usdtTokenDecimals);
     }
 
-    function enterTheRoom(uint level) public nonReentrant {
-        require(level >= 0 && level < 12, "Invalid room level");
+    function enterTheRoom(uint level) external nonReentrant {
+        require(level < 12, "Invalid room level");
+
         require(rooms[level].enable, "Room is not available");
-        uint roomAmount = rooms[level].roomAmount;
-        uint currentUserNumber = rooms[level].currentUserNumber;
-        uint userCapacity = rooms[level].userCapacity;
 
-        uint256 rankRewardAmount = roomAmount * 5 / 100;
-        uint256 replenishRewardAmount = roomAmount * 10 / 100;
-        uint256 destroyAmount = roomAmount * 10 /100;
-        uint256 remainingAmount = roomAmount - rankRewardAmount - replenishRewardAmount - destroyAmount;
-
-        uint256 currentAllowance = IERC20(dpegToken).allowance(msg.sender, address(this));
-        require(currentAllowance >= roomAmount, "Token allowance is not enough");
-
-        SafeERC20.safeTransferFrom(dpegToken, msg.sender, rankPoolAddress, rankRewardAmount);
-        // TODO 这里要去pancake上把replenishRewardAmount个dpegToken换成usdtToken，然后转到replenishPoolAddress；
-        SafeERC20.safeTransferFrom(dpegToken, msg.sender, replenishPoolAddress, replenishRewardAmount);
-        SafeERC20.safeTransferFrom(dpegToken, msg.sender, blackHoleAddress, destroyAmount);
-        SafeERC20.safeTransferFrom(dpegToken, msg.sender, address(this), remainingAmount);
-        if (currentUserNumber + 1 < userCapacity) {
-            rooms[level].currentUserNumber += 1;
+        if (rooms[level].currentUserNumber + 1 < rooms[level].userCapacity) {
+            rooms[level].currentUserNumber++;
         } else {
             rooms[level].enable = false;
         }
-        emit UserEnteredRoom(msg.sender, level, roomAmount);
+
+        uint256 roomAmount = rooms[level].roomAmount;
+
+        uint256 rankReward = roomAmount * 5 / 100;
+        uint256 replenishReward = roomAmount * 10 / 100;
+        uint256 destroyAmount = roomAmount * 10 / 100;
+
+        require(
+            IERC20(dpegTokenAddress).allowance(
+                msg.sender,
+                address(this)
+            ) >= roomAmount,
+            "Token allowance is not enough"
+        );
+
+        // 全部转入当前合约
+        SafeERC20.safeTransferFrom(
+            IERC20(dpegTokenAddress),
+            msg.sender,
+            address(this),
+            roomAmount
+        );
+
+        // Rank奖励
+        SafeERC20.safeTransfer(
+            IERC20(dpegTokenAddress),
+            rankPoolAddress,
+            rankReward
+        );
+
+        // 销毁
+        SafeERC20.safeTransfer(
+            IERC20(dpegTokenAddress),
+            blackHoleAddress,
+            destroyAmount
+        );
+
+        // Router授权
+        IERC20(dpegTokenAddress).approve(
+            pancakeRouterAddress,
+            replenishReward
+        );
+
+        address[] memory path = new address[](2);
+
+        path[0] = dpegTokenAddress;
+        path[1] = router.WETH();
+
+        uint256 amountOutMin;
+
+        {
+            uint[] memory amounts = router.getAmountsOut(
+                replenishReward,
+                path
+            );
+
+            amountOutMin = amounts[1] * 85 / 100;
+        }
+
+        // DPEG -> BNB
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            replenishReward,
+            amountOutMin,
+            path,
+            address(this),
+            block.timestamp + 1200
+        );
+
+        emit UserEnteredRoom(
+            msg.sender,
+            level,
+            roomAmount
+        );
     }
 
+    receive() external payable {}
+
     function sendInstantReward(uint level, address winner, address[] memory directUser, address[] memory indirectUser) public onlyOwner {
+        require(!rooms[level].enable, "Room not finished");
         require(level >= 0 && level < 12, "Invalid room level");
         require(winner != address(0), "Winner address is zero");
 
@@ -181,15 +247,21 @@ contract Dapp is Ownable, ReentrancyGuard {
         }
     }
 
-    function withdrawReplenishReward() public {
+    function withdrawReplenishReward() public nonReentrant {
         UserInfo storage userInfo = userReward[msg.sender];
         require(userInfo.replenishReward > 0, "Replenish reward is zero");
-        userReward[msg.sender].replenishReward = 0;
-        uint256 poolBalance = IERC20(usdtToken).balanceOf(replenishPoolAddress);
-        require(poolBalance >= userInfo.replenishReward, "User replenish reward amount large of pool balance");
-        uint256 poolAllowance = IERC20(usdtToken).allowance(replenishPoolAddress, address(this));
-        require(poolAllowance >= userInfo.replenishReward, "Replenish pool allowance is not enough");
-        SafeERC20.safeTransferFrom(usdtToken, replenishPoolAddress, msg.sender, userInfo.replenishReward);
-        emit ReplenishRewardWithdrawn(msg.sender, userInfo.replenishReward);
+        
+        uint256 rewardAmount = userInfo.replenishReward;
+        userInfo.replenishReward = 0;
+
+        // 检查合约里的 BNB 余额是否足够
+        // 注意：address(this).balance 是合约当前拥有的 BNB 数量
+        require(address(this).balance >= rewardAmount, "Insufficient BNB in contract");
+
+        // 使用 SafeCast 或者直接转换（因为 rewardAmount 是 uint256，而 transfer 需要 payable）
+        // OpenZeppelin 的库通常有 Address.sendValue，但这里为了简单直接用 transfer
+        payable(msg.sender).transfer(rewardAmount);
+
+        emit ReplenishRewardWithdrawn(msg.sender, rewardAmount);
     }
 }
