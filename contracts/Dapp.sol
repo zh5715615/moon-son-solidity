@@ -5,20 +5,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
 contract Dapp is Ownable, ReentrancyGuard {
 
-    uint256 public usdtTokenDecimals; 
-
     uint256 public dpegTokenDecimals; 
-
-    IERC20Metadata public usdtToken;
-    address public usdtTokenAddress;
 
     IERC20Metadata public dpegToken;
     address public dpegTokenAddress;
@@ -60,13 +52,8 @@ contract Dapp is Ownable, ReentrancyGuard {
     event RankRewardWithdrawn(address indexed user, uint256 amount);
     event ReplenishRewardWithdrawn(address indexed user, uint256 amount);
 
-    constructor(address beneficiary, address _rankPoolAddress, 
-                address _usdtAddress, address _dpegAddress) payable Ownable(beneficiary) {
+    constructor(address beneficiary, address _rankPoolAddress, address _dpegAddress) payable Ownable(beneficiary) {
         rankPoolAddress = _rankPoolAddress;
-        
-        usdtToken = IERC20Metadata(_usdtAddress);
-        usdtTokenAddress = _usdtAddress;
-        usdtTokenDecimals = 10 ** usdtToken.decimals();
         
         dpegToken = IERC20Metadata(_dpegAddress);
         dpegTokenAddress = _dpegAddress;
@@ -84,8 +71,6 @@ contract Dapp is Ownable, ReentrancyGuard {
         rooms[9] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_4 * dpegTokenDecimals, 0, true);
         rooms[10] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_5 * dpegTokenDecimals, 0, true);
         rooms[11] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_6 * dpegTokenDecimals, 0, true);
-
-        usdtToken.approve(pancakeRouterAddress, 100000000000 * usdtTokenDecimals);
     }
 
     function enterTheRoom(uint level) external nonReentrant {
