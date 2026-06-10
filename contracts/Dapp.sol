@@ -78,7 +78,7 @@ contract Dapp is Ownable, ReentrancyGuard {
 
         require(rooms[level].enable, "Room is not available");
 
-        if (rooms[level].currentUserNumber + 1 < rooms[level].userCapacity) {
+        if (rooms[level].currentUserNumber + 1 <= rooms[level].userCapacity) {
             rooms[level].currentUserNumber++;
         } else {
             rooms[level].enable = false;
@@ -212,12 +212,12 @@ contract Dapp is Ownable, ReentrancyGuard {
     function withdrawRankReward() public nonReentrant {
         UserInfo storage userInfo = userReward[msg.sender];
         require(userInfo.rankReward > 0, "Rank reward is zero");
-        userReward[msg.sender].rankReward = 0;
         uint256 poolBalance = IERC20(dpegToken).balanceOf(rankPoolAddress);
         require(poolBalance >= userInfo.rankReward, "User rank reward amount large of pool balance");
         uint256 poolAllowance = IERC20(dpegToken).allowance(rankPoolAddress, address(this));
         require(poolAllowance >= userInfo.rankReward, "Rank pool allowance is not enough");
         SafeERC20.safeTransferFrom(dpegToken, rankPoolAddress, msg.sender, userInfo.rankReward);
+        userReward[msg.sender].rankReward = 0;
         emit RankRewardWithdrawn(msg.sender, userInfo.rankReward);
     }
 
