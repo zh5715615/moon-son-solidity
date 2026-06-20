@@ -78,9 +78,9 @@ contract Dapp is Ownable, ReentrancyGuard {
 
         require(rooms[level].enable, "Room is not available");
 
-        if (rooms[level].currentUserNumber + 1 <= rooms[level].userCapacity) {
-            rooms[level].currentUserNumber++;
-        } else {
+        rooms[level].currentUserNumber++;
+
+        if (rooms[level].currentUserNumber >= rooms[level].userCapacity) {
             rooms[level].enable = false;
         }
 
