@@ -87,7 +87,8 @@ contract Dapp is Ownable, ReentrancyGuard {
         uint256 roomAmount = rooms[level].roomAmount;
 
         uint256 rankReward = roomAmount * 5 / 100;
-        uint256 replenishReward = roomAmount * 10 / 100;
+        // replenishReward 直接留在合约中作为回补池
+        //uint256 replenishReward = roomAmount * 10 / 100;
         uint256 destroyAmount = roomAmount * 10 / 100;
 
         require(
@@ -118,37 +119,6 @@ contract Dapp is Ownable, ReentrancyGuard {
             IERC20(dpegTokenAddress),
             blackHoleAddress,
             destroyAmount
-        );
-
-        // Router授权
-        IERC20(dpegTokenAddress).approve(
-            pancakeRouterAddress,
-            replenishReward
-        );
-
-        address[] memory path = new address[](2);
-
-        path[0] = dpegTokenAddress;
-        path[1] = router.WETH();
-
-        uint256 amountOutMin;
-
-        {
-            uint[] memory amounts = router.getAmountsOut(
-                replenishReward,
-                path
-            );
-
-            amountOutMin = amounts[1] * 85 / 100;
-        }
-
-        // DPEG -> BNB
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            replenishReward,
-            amountOutMin,
-            path,
-            address(this),
-            block.timestamp + 1200
         );
 
         emit UserEnteredRoom(
@@ -234,18 +204,23 @@ contract Dapp is Ownable, ReentrancyGuard {
 
     function withdrawReplenishReward() public nonReentrant {
         UserInfo storage userInfo = userReward[msg.sender];
+
         require(userInfo.replenishReward > 0, "Replenish reward is zero");
-        
+
         uint256 rewardAmount = userInfo.replenishReward;
         userInfo.replenishReward = 0;
 
-        // 检查合约里的 BNB 余额是否足够
-        // 注意：address(this).balance 是合约当前拥有的 BNB 数量
-        require(address(this).balance >= rewardAmount, "Insufficient BNB in contract");
+        // 检查合约 token 余额
+        require(
+            IERC20(dpegTokenAddress).balanceOf(address(this)) >= rewardAmount,
+            "Insufficient token in contract"
+        );
 
-        // 使用 SafeCast 或者直接转换（因为 rewardAmount 是 uint256，而 transfer 需要 payable）
-        // OpenZeppelin 的库通常有 Address.sendValue，但这里为了简单直接用 transfer
-        payable(msg.sender).transfer(rewardAmount);
+        SafeERC20.safeTransfer(
+            IERC20(dpegTokenAddress),
+            msg.sender,
+            rewardAmount
+        );
 
         emit ReplenishRewardWithdrawn(msg.sender, rewardAmount);
     }
