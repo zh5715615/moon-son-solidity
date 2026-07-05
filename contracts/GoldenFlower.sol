@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 interface IGameRewardPool {
     function depositRankReward(uint256 amount) external;
     function depositReplenishReward(uint256 amount) external;
+}
+
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function decimals() external view returns (uint8);
 }
 
 /**
@@ -56,6 +63,7 @@ contract GoldenFlower {
     IERC20 public immutable token;
     address public immutable dealer;
     address public immutable rewardPool;
+    uint256 public immutable tokenUnit;
 
     enum RoomStatus { Waiting, Locked }
 
@@ -128,6 +136,7 @@ contract GoldenFlower {
         token = IERC20(_token);
         dealer = _dealer;
         rewardPool = _rewardPool;
+        tokenUnit = 10 ** uint256(IERC20(_token).decimals());
 
         for (uint256 i = 1; i <= TOTAL_ROOMS; i++) {
             rooms[i].status = RoomStatus.Waiting;
@@ -138,12 +147,12 @@ contract GoldenFlower {
     /**
      * @notice 根据 roomId 返回房间配置。
      */
-    function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
+    function _configOf(uint256 roomId) internal view returns (RoomConfig memory cfg) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
-        if (roomId <= 10) cfg = RoomConfig({ betUnit: 1_000 ether, maxDeposit: 100_000 ether });
-        else if (roomId <= 20) cfg = RoomConfig({ betUnit: 3_000 ether, maxDeposit: 300_000 ether });
-        else if (roomId <= 30) cfg = RoomConfig({ betUnit: 5_000 ether, maxDeposit: 500_000 ether });
-        else cfg = RoomConfig({ betUnit: 10_000 ether, maxDeposit: 1_000_000 ether });
+        if (roomId <= 10) cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 100_000 * tokenUnit });
+        else if (roomId <= 20) cfg = RoomConfig({ betUnit: 3_000 * tokenUnit, maxDeposit: 300_000 * tokenUnit });
+        else if (roomId <= 30) cfg = RoomConfig({ betUnit: 5_000 * tokenUnit, maxDeposit: 500_000 * tokenUnit });
+        else cfg = RoomConfig({ betUnit: 10_000 * tokenUnit, maxDeposit: 1_000_000 * tokenUnit });
     }
 
     /**
@@ -461,7 +470,6 @@ contract GoldenFlower {
     function _payMappedRecipients(address[] calldata addrs, uint256[] calldata values) internal {
         for (uint256 i = 0; i < values[3] + values[4]; i++) {
             if (addrs[i + 2] == address(0)) revert InvalidRecipient();
-            if (_hasDuplicateRecipient(addrs, i + 2)) revert DuplicateRecipient();
             if (values[i + 5] > 0) {
                 _safeTransfer(addrs[i + 2], values[i + 5]);
             }
