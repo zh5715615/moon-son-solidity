@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *
  * 使用方式：
  * 1. 部署时传入同一个游戏 token 地址。
- * 2. GoldenFlower、MoonSonDapp 等游戏合约结算时，把排名池资金、回补池资金存入本合约。
+ * 2. GoldenFlower、Bullfigthing 等游戏合约结算时，把排名池资金、回补池资金存入本合约。
  * 3. 合约 owner 按业务计算结果调用 sendRankReward / sendReplenishReward，把奖励记录到 userReward。
  * 4. 用户调用 withdrawRankReward / withdrawReplenishReward 自己提取奖励。
  */

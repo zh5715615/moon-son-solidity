@@ -17,7 +17,7 @@ interface IERC20 {
 
 /**
  * @title GoldenFlower
- * @notice 三人炸金花链上资金托管合约。
+ * @notice 三人场和五人场炸金花链上资金托管合约。
  *
  * 新版本职责边界：
  * 1. 链上只负责玩家进入房间时托管房间上限金额。
@@ -26,10 +26,10 @@ interface IERC20 {
  * 4. 如果房间未完成或需要取消，dealer 可调用 refundRoom 原路退还已加入玩家的托管金额。
  *
  * 房间档位：
- * roomId  1-10 : 链下积分单位 1,000  | 入房托管 100,000
- * roomId 11-20 : 链下积分单位 3,000  | 入房托管 300,000
- * roomId 21-30 : 链下积分单位 5,000  | 入房托管 500,000
- * roomId 31-40 : 链下积分单位 10,000 | 入房托管 1,000,000
+ * roomId  1-5  : 3 人场 | 底注 1,000 | 入房托管 30,000
+ * roomId  6-10 : 3 人场 | 底注 1,000 | 入房托管 120,000
+ * roomId 11-15 : 5 人场 | 底注 1,000 | 入房托管 50,000
+ * roomId 16-20 : 5 人场 | 底注 1,000 | 入房托管 200,000
  */
 contract GoldenFlower {
 
@@ -57,8 +57,9 @@ contract GoldenFlower {
     error InsufficientContractTokenBalance();
     error TokenTransferFailed();
 
-    uint256 public constant TOTAL_ROOMS = 40;
-    uint256 public constant ROOM_PLAYERS = 3;
+    uint256 public constant TOTAL_ROOMS = 20;
+    // 最大房间容量；具体房间是 3 人场还是 5 人场，由 _configOf(roomId) 决定。
+    uint256 public constant ROOM_PLAYERS = 5;
 
     IERC20 public immutable token;
     address public immutable dealer;
@@ -68,11 +69,14 @@ contract GoldenFlower {
     enum RoomStatus { Waiting, Locked }
 
     struct RoomConfig {
-        // 链下积分单位：1k / 3k / 5k / 10k。
+        // 链下积分单位，当前所有房型均为 1K。
         uint256 betUnit;
 
-        // 玩家入房时一次性托管的上限金额：10w / 30w / 50w / 100w。
+        // 玩家入房时一次性托管的上限金额：30K / 120K / 50K / 200K。
         uint256 maxDeposit;
+
+        // 房间满员人数，仅允许 3 或 5。
+        uint256 playerCapacity;
     }
 
     struct Player {
@@ -85,7 +89,7 @@ contract GoldenFlower {
         uint256 roundNumber;
         uint256 escrow;
         uint256 playerCount;
-        address[3] playerAddrs;
+        address[5] playerAddrs;
     }
 
     mapping(uint256 => Room) private rooms;
@@ -100,7 +104,7 @@ contract GoldenFlower {
     event PlayerJoined(uint256 indexed roomId, address indexed player, uint256 deposit, uint256 round);
 
     /**
-     * @notice 房间满 3 人，链上资金已锁定，后端可以开始链下游戏。
+     * @notice 房间达到当前房型人数上限，链上资金已锁定，后端可以开始链下游戏。
      */
     event RoomLocked(uint256 indexed roomId, uint256 round, uint256 escrow);
 
@@ -149,10 +153,15 @@ contract GoldenFlower {
      */
     function _configOf(uint256 roomId) internal view returns (RoomConfig memory cfg) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
-        if (roomId <= 10) cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 100_000 * tokenUnit });
-        else if (roomId <= 20) cfg = RoomConfig({ betUnit: 3_000 * tokenUnit, maxDeposit: 300_000 * tokenUnit });
-        else if (roomId <= 30) cfg = RoomConfig({ betUnit: 5_000 * tokenUnit, maxDeposit: 500_000 * tokenUnit });
-        else cfg = RoomConfig({ betUnit: 10_000 * tokenUnit, maxDeposit: 1_000_000 * tokenUnit });
+        if (roomId <= 5) {
+            cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 30_000 * tokenUnit, playerCapacity: 3 });
+        } else if (roomId <= 10) {
+            cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 120_000 * tokenUnit, playerCapacity: 3 });
+        } else if (roomId <= 15) {
+            cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 50_000 * tokenUnit, playerCapacity: 5 });
+        } else {
+            cfg = RoomConfig({ betUnit: 1_000 * tokenUnit, maxDeposit: 200_000 * tokenUnit, playerCapacity: 5 });
+        }
     }
 
     /**
@@ -163,12 +172,12 @@ contract GoldenFlower {
      */
     function joinRoom(uint256 roomId) external validRoom(roomId) {
         Room storage room = rooms[roomId];
+        RoomConfig memory cfg = _configOf(roomId);
         if (room.status != RoomStatus.Waiting) revert RoomNotOpen();
-        if (room.playerCount >= ROOM_PLAYERS) revert RoomFull();
+        if (room.playerCount >= cfg.playerCapacity) revert RoomFull();
         if (players[roomId][msg.sender].addr != address(0)) revert AlreadyInRoom();
         if (userRoomIds[msg.sender] != 0) revert AlreadyInRoom();
 
-        RoomConfig memory cfg = _configOf(roomId);
         _safeTransferFrom(msg.sender, cfg.maxDeposit);
 
         players[roomId][msg.sender] = Player({
@@ -183,7 +192,7 @@ contract GoldenFlower {
 
         emit PlayerJoined(roomId, msg.sender, cfg.maxDeposit, room.roundNumber);
 
-        if (room.playerCount == ROOM_PLAYERS) {
+        if (room.playerCount == cfg.playerCapacity) {
             room.status = RoomStatus.Locked;
             emit RoomLocked(roomId, room.roundNumber, room.escrow);
         }
@@ -194,10 +203,12 @@ contract GoldenFlower {
      *
      * 后端链下完成跟注、加注、看牌、弃牌、比牌和积分计算后调用。
      *
-     * playerBets 索引含义，必须和 getRoomInfo 返回的 addrs 对齐：
-     * [0] = player0 本局实际押注金额
-     * [1] = player1 本局实际押注金额
-     * [2] = player2 本局实际押注金额
+     * values 索引含义：
+     * [0..4] = 五个座位的实际押注，必须和 getRoomInfo 返回的 addrs 对齐；
+     *          3 人房的 [3]、[4] 固定补 0。
+     * [5] = directCount，直推奖励地址数量
+     * [6] = indirectCount，间推奖励地址数量
+     * [7..] = 先放 directCount 个直推金额，再放 indirectCount 个间推金额
      *
      * poolAddrs 索引含义：
      * [0] = blackHoleAddress，销毁/黑洞地址，获得押注总额 10%
@@ -255,7 +266,7 @@ contract GoldenFlower {
      * @notice dealer 取消房间并退还已加入玩家的托管金额。
      *
      * 适用场景：
-     * 1. 房间未满 3 人，游戏无法开始。
+     * 1. 房间未达到当前房型人数上限，游戏无法开始。
      * 2. 后端异常，需要取消本局。
      *
      * 如果房间已满且正常完成链下结算，应调用 settleRoom，而不是 refundRoom。
@@ -289,11 +300,14 @@ contract GoldenFlower {
      * [3] = playerCount，当前玩家数量
      * [4] = betUnit，链下积分单位
      * [5] = maxDeposit，单个玩家入房托管上限
+     * [6] = playerCapacity，房间人数上限，值为 3 或 5
      *
      * addrs 索引含义：
      * [0] = player0，第 1 个加入的玩家
      * [1] = player1，第 2 个加入的玩家
      * [2] = player2，第 3 个加入的玩家
+     * [3] = player3，第 4 个加入的玩家，仅 5 人房使用
+     * [4] = player4，第 5 个加入的玩家，仅 5 人房使用
      */
     function getRoomInfo(uint256 roomId)
     external
@@ -307,18 +321,19 @@ contract GoldenFlower {
         Room storage room = rooms[roomId];
         RoomConfig memory cfg = _configOf(roomId);
 
-        values = new uint256[](6);
+        values = new uint256[](7);
         values[0] = uint256(room.status);
         values[1] = room.roundNumber;
         values[2] = room.escrow;
         values[3] = room.playerCount;
         values[4] = cfg.betUnit;
         values[5] = cfg.maxDeposit;
+        values[6] = cfg.playerCapacity;
 
-        addrs = new address[](3);
-        addrs[0] = room.playerAddrs[0];
-        addrs[1] = room.playerAddrs[1];
-        addrs[2] = room.playerAddrs[2];
+        addrs = new address[](cfg.playerCapacity);
+        for (uint256 i = 0; i < cfg.playerCapacity; i++) {
+            addrs[i] = room.playerAddrs[i];
+        }
     }
 
     /**
@@ -390,14 +405,19 @@ contract GoldenFlower {
         return players[roomId][player].addr != address(0);
     }
 
+    /**
+     * @dev 验证结算数组。values[0..4] 固定对应五个座位的押注，
+     *      3 人房的 values[3]、values[4] 必须补 0；values[5]、values[6]
+     *      分别为直推和间推收款地址数量，values[7..] 为对应奖励金额。
+     */
     function _validateSettlementParams(
-        address[] calldata addrs,
-        uint256[] calldata values
-    ) internal pure {
-        if (addrs.length < 2) revert InvalidArrayLength();
-        if (values.length < 5) revert InvalidArrayLength();
-        if (addrs.length != values[3] + values[4] + 2) revert InvalidArrayLength();
-        if (values.length != values[3] + values[4] + 5) revert InvalidArrayLength();
+        address[] calldata addrs,    // 地址数组，包含接收方地址
+        uint256[] calldata values    // 数值数组，包含结算金额和数量参数
+    ) internal pure {                // 内部纯函数，不修改状态，且只能在内部调用
+        if (addrs.length < 2) revert InvalidArrayLength();    // 检查地址数组长度是否小于2
+        if (values.length < 7) revert InvalidArrayLength();
+        if (addrs.length != values[5] + values[6] + 2) revert InvalidArrayLength();
+        if (values.length != values[5] + values[6] + 7) revert InvalidArrayLength();
     }
 
     function _collectBetsAndRefunds(
@@ -406,7 +426,7 @@ contract GoldenFlower {
     ) internal returns (uint256 totalBet, uint256 totalRefund) {
         Room storage room = rooms[roomId];
 
-        for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
+        for (uint256 i = 0; i < room.playerCount; i++) {
             address player = room.playerAddrs[i];
             uint256 deposit = players[roomId][player].deposit;
             if (values[i] > deposit) revert InvalidBetAmount();
@@ -424,8 +444,8 @@ contract GoldenFlower {
         uint256 totalBet,
         uint256[] calldata values
     ) internal pure {
-        if (_sumRange(values, 5, values[3]) != totalBet * 3 / 100) revert InvalidReferralAmount();
-        if (_sumRange(values, 5 + values[3], values[4]) != totalBet * 2 / 100) revert InvalidReferralAmount();
+        if (_sumRange(values, 7, values[5]) != totalBet * 3 / 100) revert InvalidReferralAmount();
+        if (_sumRange(values, 7 + values[5], values[6]) != totalBet * 2 / 100) revert InvalidReferralAmount();
     }
 
     function _payBaseSettlement(
@@ -468,10 +488,10 @@ contract GoldenFlower {
     }
 
     function _payMappedRecipients(address[] calldata addrs, uint256[] calldata values) internal {
-        for (uint256 i = 0; i < values[3] + values[4]; i++) {
+        for (uint256 i = 0; i < values[5] + values[6]; i++) {
             if (addrs[i + 2] == address(0)) revert InvalidRecipient();
-            if (values[i + 5] > 0) {
-                _safeTransfer(addrs[i + 2], values[i + 5]);
+            if (values[i + 7] > 0) {
+                _safeTransfer(addrs[i + 2], values[i + 7]);
             }
         }
     }

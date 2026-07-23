@@ -1,227 +1,331 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
 
-contract Dapp is Ownable, ReentrancyGuard {
+interface IERC20Metadata is IERC20 {
+    function decimals() external view returns (uint8);
+}
 
-    uint256 public dpegTokenDecimals; 
+library SafeERC20 {
+    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+        require(token.transfer(to, value), "SafeERC20: transfer failed");
+    }
+
+    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
+        require(token.transferFrom(from, to, value), "SafeERC20: transferFrom failed");
+    }
+
+    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
+        uint256 currentAllowance = token.allowance(address(this), spender);
+        require(token.approve(spender, currentAllowance + value), "SafeERC20: approve failed");
+    }
+}
+
+abstract contract ReentrancyGuard {
+    uint256 private constant NOT_ENTERED = 1;
+    uint256 private constant ENTERED = 2;
+    uint256 private _status;
+
+    constructor() {
+        _status = NOT_ENTERED;
+    }
+
+    modifier nonReentrant() {
+        require(_status != ENTERED, "ReentrancyGuard: reentrant call");
+        _status = ENTERED;
+        _;
+        _status = NOT_ENTERED;
+    }
+}
+
+abstract contract Ownable {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    constructor(address initialOwner) {
+        require(initialOwner != address(0), "Ownable: owner is zero");
+        _owner = initialOwner;
+        emit OwnershipTransferred(address(0), initialOwner);
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == _owner, "Ownable: caller is not owner");
+        _;
+    }
+
+    function owner() public view returns (address) {
+        return _owner;
+    }
+
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is zero");
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+interface IGameRewardPool {
+    function depositRankReward(uint256 amount) external;
+    function depositReplenishReward(uint256 amount) external;
+}
+
+contract Bullfigthing is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    uint256 public dpegTokenDecimals;
 
     IERC20Metadata public dpegToken;
     address public dpegTokenAddress;
 
-    address constant pancakeRouterAddress = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+    address public gameRewardPoolAddress;
+    address public constant blackHoleAddress = 0x000000000000000000000000000000000000dEaD;
 
-    IUniswapV2Router02 public router = IUniswapV2Router02(pancakeRouterAddress);
+    uint256 public constant FEW_PERSON_ROOM = 3;
+    uint256 public constant MULTI_PERSON_ROOM = 5;
 
-    address rankPoolAddress;           //排行榜资金地址
-    address constant blackHoleAddress = 0x000000000000000000000000000000000000dEaD;          //黑洞地址
+    uint256 public constant ROOM_LEVEL_1 = 3000;
+    uint256 public constant ROOM_LEVEL_2 = 6000;
+    uint256 public constant ROOM_LEVEL_3 = 12000;
+    uint256 public constant ROOM_LEVEL_4 = 200000;
+    uint256 public constant ROOM_LEVEL_5 = 500000;
+    uint256 public constant ROOM_LEVEL_6 = 1000000;
 
-    struct UserInfo {
-        uint256 rankReward;         // 排行奖励
-        uint256 replenishReward;    // 回补奖励
-    }
-
-    uint constant FEW_PERSON_ROOM = 3;   //少人房人数
-    uint constant MULTI_PERSON_ROOM = 5; //多人房人数
-
-    uint constant ROOM_LEVEL_1 = 25000;
-    uint constant ROOM_LEVEL_2 = 50000;
-    uint constant ROOM_LEVEL_3 = 100000;
-    uint constant ROOM_LEVEL_4 = 200000;
-    uint constant ROOM_LEVEL_5 = 500000;
-    uint constant ROOM_LEVEL_6 = 1000000;
+    uint256 public constant TOTAL_ROOMS = 15;
 
     struct RoomInfo {
-        uint userCapacity;          //用户数量
-        uint256 roomAmount;         //房间金额
-        uint currentUserNumber;     //当前房间人数
-        bool enable;                //房间是否可加入
+        uint256 userCapacity;       // 房间人数上限，3人房或5人房
+        uint256 roomAmount;         // 单个玩家入房托管金额
+        uint256 currentUserNumber;  // 当前已加入人数
+        bool enable;                // true=可加入，false=已满员等待结算
     }
 
-    mapping(uint => RoomInfo) public rooms;
+    struct PlayerInfo {
+        address account;
+        uint256 amount;
+        uint256 round;
+    }
 
-    mapping(address => UserInfo) userReward;
+    mapping(uint256 => RoomInfo) public rooms;
+    mapping(uint256 => uint256) public contractRounds;
+    mapping(uint256 => address[]) private roomPlayers;
+    mapping(uint256 => mapping(address => PlayerInfo)) private roomPlayerInfo;
+    mapping(address => uint256) private userRoomLevels;
 
-    event UserEnteredRoom(address indexed user, uint indexed level, uint256 amount);
-    event RankRewardWithdrawn(address indexed user, uint256 amount);
-    event ReplenishRewardWithdrawn(address indexed user, uint256 amount);
+    event UserEnteredRoom(address indexed user, uint256 indexed level, uint256 amount);
+    event UserEnteredRoomWithRound(address indexed user, uint256 indexed level, uint256 amount, uint256 round);
+    event RoomFinished(uint256 indexed level, uint256 indexed round, address indexed winner, uint256 totalAmount);
+    event RoomReset(uint256 indexed level, uint256 newRound);
+    event RewardPoolChanged(address indexed oldRewardPool, address indexed newRewardPool);
 
-    constructor(address beneficiary, address _rankPoolAddress, address _dpegAddress) payable Ownable(beneficiary) {
-        rankPoolAddress = _rankPoolAddress;
-        
+    constructor(address beneficiary, address _gameRewardPoolAddress, address _dpegAddress) payable Ownable(beneficiary) {
+        require(_gameRewardPoolAddress != address(0), "Reward pool is zero");
+        require(_dpegAddress != address(0), "Token is zero");
+
+        gameRewardPoolAddress = _gameRewardPoolAddress;
         dpegToken = IERC20Metadata(_dpegAddress);
         dpegTokenAddress = _dpegAddress;
         dpegTokenDecimals = 10 ** dpegToken.decimals();
 
-        rooms[0] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_1 * dpegTokenDecimals, 0, true);
-        rooms[1] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_2 * dpegTokenDecimals, 0, true);
-        rooms[2] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_3 * dpegTokenDecimals, 0, true);
-        rooms[3] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_4 * dpegTokenDecimals, 0, true);
-        rooms[4] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_5 * dpegTokenDecimals, 0, true);
-        rooms[5] = RoomInfo(FEW_PERSON_ROOM, ROOM_LEVEL_6 * dpegTokenDecimals, 0, true);
-        rooms[6] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_1 * dpegTokenDecimals, 0, true);
-        rooms[7] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_2 * dpegTokenDecimals, 0, true);
-        rooms[8] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_3 * dpegTokenDecimals, 0, true);
-        rooms[9] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_4 * dpegTokenDecimals, 0, true);
-        rooms[10] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_5 * dpegTokenDecimals, 0, true);
-        rooms[11] = RoomInfo(MULTI_PERSON_ROOM, ROOM_LEVEL_6 * dpegTokenDecimals, 0, true);
+        // 0-4: 5 人 3K 房；5-9: 5 人 6K 房；10-14: 5 人 12K 房。
+        for (uint256 level = 0; level < 5; level++) {
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_1 * dpegTokenDecimals);
+        }
+        for (uint256 level = 5; level < 10; level++) {
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_2 * dpegTokenDecimals);
+        }
+        for (uint256 level = 10; level < TOTAL_ROOMS; level++) {
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_3 * dpegTokenDecimals);
+        }
     }
 
-    function enterTheRoom(uint level) external nonReentrant {
-        require(level < 12, "Invalid room level");
+    function _initRoom(uint256 level, uint256 userCapacity, uint256 roomAmount) internal {
+        rooms[level] = RoomInfo(userCapacity, roomAmount, 0, true);
+        contractRounds[level] = 1;
+    }
 
-        require(rooms[level].enable, "Room is not available");
+    function setGameRewardPoolAddress(address newRewardPoolAddress) external onlyOwner {
+        require(newRewardPoolAddress != address(0), "Reward pool is zero");
+        address oldRewardPool = gameRewardPoolAddress;
+        gameRewardPoolAddress = newRewardPoolAddress;
+        emit RewardPoolChanged(oldRewardPool, newRewardPoolAddress);
+    }
 
-        rooms[level].currentUserNumber++;
+    function enterTheRoom(uint256 level) external nonReentrant {
+        require(level < TOTAL_ROOMS, "Invalid room level");
 
-        if (rooms[level].currentUserNumber >= rooms[level].userCapacity) {
-            rooms[level].enable = false;
+        RoomInfo storage room = rooms[level];
+        require(room.enable, "Room is not available");
+        require(userRoomLevels[msg.sender] == 0 || !_isUserInRoom(msg.sender), "User already in room");
+        require(roomPlayerInfo[level][msg.sender].account == address(0), "User already in this room");
+
+        uint256 roomAmount = room.roomAmount;
+        require(IERC20(dpegTokenAddress).allowance(msg.sender, address(this)) >= roomAmount, "Token allowance is not enough");
+
+        IERC20 token = IERC20(dpegTokenAddress);
+        token.safeTransferFrom(msg.sender, address(this), roomAmount);
+
+        roomPlayers[level].push(msg.sender);
+        roomPlayerInfo[level][msg.sender] = PlayerInfo(msg.sender, roomAmount, contractRounds[level]);
+        userRoomLevels[msg.sender] = level + 1;
+
+        room.currentUserNumber++;
+        if (room.currentUserNumber >= room.userCapacity) {
+            room.enable = false;
         }
 
-        uint256 roomAmount = rooms[level].roomAmount;
-
-        uint256 rankReward = roomAmount * 5 / 100;
-        // replenishReward 直接留在合约中作为回补池
-        //uint256 replenishReward = roomAmount * 10 / 100;
-        uint256 destroyAmount = roomAmount * 10 / 100;
-
-        require(
-            IERC20(dpegTokenAddress).allowance(
-                msg.sender,
-                address(this)
-            ) >= roomAmount,
-            "Token allowance is not enough"
-        );
-
-        // 全部转入当前合约
-        SafeERC20.safeTransferFrom(
-            IERC20(dpegTokenAddress),
-            msg.sender,
-            address(this),
-            roomAmount
-        );
-
-        // Rank奖励
-        SafeERC20.safeTransfer(
-            IERC20(dpegTokenAddress),
-            rankPoolAddress,
-            rankReward
-        );
-
-        // 销毁
-        SafeERC20.safeTransfer(
-            IERC20(dpegTokenAddress),
-            blackHoleAddress,
-            destroyAmount
-        );
-
-        emit UserEnteredRoom(
-            msg.sender,
-            level,
-            roomAmount
-        );
+        emit UserEnteredRoom(msg.sender, level, roomAmount);
+        emit UserEnteredRoomWithRound(msg.sender, level, roomAmount, contractRounds[level]);
     }
 
     receive() external payable {}
 
-    function sendInstantReward(uint level, address winner, address[] memory directUser, address[] memory indirectUser) public onlyOwner {
+    function sendInstantReward(
+        uint256 level,
+        address winner,
+        address[] memory directUser,
+        address[] memory indirectUser
+    ) public onlyOwner nonReentrant {
+        require(level < TOTAL_ROOMS, "Invalid room level");
         require(!rooms[level].enable, "Room not finished");
-        require(level >= 0 && level < 12, "Invalid room level");
         require(winner != address(0), "Winner address is zero");
+        require(_isRoomPlayer(level, winner), "Winner not in room");
 
-        uint userCapacity = rooms[level].userCapacity;
+        uint256 userCapacity = rooms[level].userCapacity;
         require(directUser.length <= userCapacity, "Direct user list too long");
         require(indirectUser.length <= userCapacity, "Indirect user list too long");
-        
+
         uint256 roomAmount = rooms[level].roomAmount;
         uint256 totalAmount = roomAmount * userCapacity;
+        _distributeRewards(totalAmount, roomAmount, winner, directUser, indirectUser);
 
-        uint256 winnerReward = totalAmount * 70 / 100;
+        uint256 finishedRound = contractRounds[level];
+        _resetRoom(level);
+        emit RoomFinished(level, finishedRound, winner, totalAmount);
+    }
+
+    function _distributeRewards(
+        uint256 totalAmount,
+        uint256 roomAmount,
+        address winner,
+        address[] memory directUser,
+        address[] memory indirectUser
+    ) internal {
+        uint256 userCapacity = totalAmount / roomAmount;
         uint256 directReward = roomAmount * 3 / 100;
         uint256 indirectReward = roomAmount * 2 / 100;
+        uint256 missingReferralReward = directReward * (userCapacity - directUser.length)
+            + indirectReward * (userCapacity - indirectUser.length);
+        IERC20 token = IERC20(dpegTokenAddress);
+        require(token.balanceOf(address(this)) >= totalAmount, "Contract token balance is not enough");
 
-        uint256 requiredBalance = winnerReward + directReward * directUser.length + indirectReward * indirectUser.length;
-        uint256 contractBalance = IERC20(dpegToken).balanceOf(address(this));
-        require(contractBalance >= requiredBalance, "Contract token balance is not enough");
+        token.safeTransfer(winner, totalAmount * 70 / 100);
+        _distributePoolRewards(token, totalAmount, missingReferralReward);
+        _transferReferralRewards(token, directUser, directReward, "Direct user address is zero");
+        _transferReferralRewards(token, indirectUser, indirectReward, "Indirect user address is zero");
+    }
 
-        SafeERC20.safeTransfer(dpegToken, winner, winnerReward);
-        for (uint i = 0; i < directUser.length; i++) {
-            require(directUser[i] != address(0), "Direct user address is zero");
-            SafeERC20.safeTransfer(dpegToken, directUser[i], directReward);
+    function _distributePoolRewards(IERC20 token, uint256 totalAmount, uint256 missingReferralReward) internal {
+        // 基础销毁10%；不存在的直推3%或间推2%也统一转入黑洞地址。
+        token.safeTransfer(blackHoleAddress, totalAmount * 10 / 100 + missingReferralReward);
+        _depositReplenishReward(totalAmount * 10 / 100);
+        _depositRankReward(totalAmount * 5 / 100);
+    }
+
+    function _transferReferralRewards(
+        IERC20 token,
+        address[] memory users,
+        uint256 amount,
+        string memory zeroAddressMessage
+    ) internal {
+        for (uint256 i = 0; i < users.length; i++) {
+            require(users[i] != address(0), zeroAddressMessage);
+            token.safeTransfer(users[i], amount);
         }
-        for (uint i = 0; i < indirectUser.length; i++) {
-            require(indirectUser[i] != address(0), "Indirect user address is zero");
-            SafeERC20.safeTransfer(dpegToken, indirectUser[i], indirectReward);
+    }
+
+    function getRoomInfo(uint256 level) external view returns (uint256[] memory values, address[] memory addrs) {
+        require(level < TOTAL_ROOMS, "Invalid room level");
+        RoomInfo storage room = rooms[level];
+
+        values = new uint256[](5);
+        values[0] = room.userCapacity;
+        values[1] = room.roomAmount;
+        values[2] = room.currentUserNumber;
+        values[3] = room.enable ? 1 : 0;
+        values[4] = contractRounds[level];
+
+        addrs = new address[](roomPlayers[level].length);
+        for (uint256 i = 0; i < roomPlayers[level].length; i++) {
+            addrs[i] = roomPlayers[level][i];
         }
+    }
+
+    function getPlayerInfo(uint256 level, address player) external view returns (uint256[] memory values, bool[] memory flags) {
+        require(level < TOTAL_ROOMS, "Invalid room level");
+        PlayerInfo storage info = roomPlayerInfo[level][player];
+
+        values = new uint256[](2);
+        values[0] = info.amount;
+        values[1] = info.round;
+
+        flags = new bool[](1);
+        flags[0] = info.account != address(0);
+    }
+
+    function getUserRoom(address user) external view returns (uint256 level, bool joined) {
+        uint256 storedLevel = userRoomLevels[user];
+        if (storedLevel == 0) {
+            return (0, false);
+        }
+        return (storedLevel - 1, _isUserInRoom(user));
+    }
+
+    function _resetRoom(uint256 level) internal {
+        address[] storage players = roomPlayers[level];
+        for (uint256 i = 0; i < players.length; i++) {
+            delete roomPlayerInfo[level][players[i]];
+            delete userRoomLevels[players[i]];
+        }
+        delete roomPlayers[level];
 
         rooms[level].enable = true;
         rooms[level].currentUserNumber = 0;
+        contractRounds[level] += 1;
+
+        emit RoomReset(level, contractRounds[level]);
     }
 
-    function sendRankReward(address[] memory rankUsers, uint256[] memory rewardAmounts) public onlyOwner {
-        require(rankUsers.length <= 10, "Rank user list too long");
-        require(rewardAmounts.length <= 10, "Reward amount list too long");
-        require(rankUsers.length == rewardAmounts.length, "Rank user list is not eq Reward amount list");
+    function _isRoomPlayer(uint256 level, address player) internal view returns (bool) {
+        return roomPlayerInfo[level][player].account != address(0);
+    }
 
-        for (uint i = 0; i < rankUsers.length; i++) {
-            require(rankUsers[i] != address(0), "Rank user address is zero");
-            userReward[rankUsers[i]].rankReward += rewardAmounts[i];
+    function _isUserInRoom(address user) internal view returns (bool) {
+        uint256 storedLevel = userRoomLevels[user];
+        if (storedLevel == 0) {
+            return false;
         }
+        uint256 level = storedLevel - 1;
+        return roomPlayerInfo[level][user].account != address(0);
     }
 
-    function getRewardAmount(address user) public view returns (uint256, uint256) {
-        return (userReward[user].rankReward, userReward[user].replenishReward);
+    function _depositRankReward(uint256 amount) internal {
+        IERC20 token = IERC20(dpegTokenAddress);
+        token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
+        IGameRewardPool(gameRewardPoolAddress).depositRankReward(amount);
     }
 
-    function withdrawRankReward() public nonReentrant {
-        UserInfo storage userInfo = userReward[msg.sender];
-        require(userInfo.rankReward > 0, "Rank reward is zero");
-        uint256 poolBalance = IERC20(dpegToken).balanceOf(rankPoolAddress);
-        require(poolBalance >= userInfo.rankReward, "User rank reward amount large of pool balance");
-        uint256 poolAllowance = IERC20(dpegToken).allowance(rankPoolAddress, address(this));
-        require(poolAllowance >= userInfo.rankReward, "Rank pool allowance is not enough");
-        SafeERC20.safeTransferFrom(dpegToken, rankPoolAddress, msg.sender, userInfo.rankReward);
-        userReward[msg.sender].rankReward = 0;
-        emit RankRewardWithdrawn(msg.sender, userInfo.rankReward);
-    }
-
-    function sendreplenishReward(address[] memory replenishUsers, uint256[] memory rewardAmounts) public onlyOwner {
-        require(replenishUsers.length <= 20, "Replenish user list too long");
-        require(rewardAmounts.length <= 20, "Replenish amount list too long");
-        require(replenishUsers.length == rewardAmounts.length, "Replenish user list is not eq Replenish amount list");
-
-        for (uint i = 0; i < replenishUsers.length; i++) {
-            require(replenishUsers[i] != address(0), "Replenish user address is zero"); 
-            userReward[replenishUsers[i]].replenishReward += rewardAmounts[i];
-        }
-    }
-
-    function withdrawReplenishReward() public nonReentrant {
-        UserInfo storage userInfo = userReward[msg.sender];
-
-        require(userInfo.replenishReward > 0, "Replenish reward is zero");
-
-        uint256 rewardAmount = userInfo.replenishReward;
-        userInfo.replenishReward = 0;
-
-        // 检查合约 token 余额
-        require(
-            IERC20(dpegTokenAddress).balanceOf(address(this)) >= rewardAmount,
-            "Insufficient token in contract"
-        );
-
-        SafeERC20.safeTransfer(
-            IERC20(dpegTokenAddress),
-            msg.sender,
-            rewardAmount
-        );
-
-        emit ReplenishRewardWithdrawn(msg.sender, rewardAmount);
+    function _depositReplenishReward(uint256 amount) internal {
+        IERC20 token = IERC20(dpegTokenAddress);
+        token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
+        IGameRewardPool(gameRewardPoolAddress).depositReplenishReward(amount);
     }
 }
