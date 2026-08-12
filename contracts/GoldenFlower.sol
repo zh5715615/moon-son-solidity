@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface IGameRewardPool {
+interface IGoldenFlowerRewardPool {
     function depositRankReward(uint256 amount) external;
     function depositReplenishReward(uint256 amount) external;
 }
 
-interface IERC20 {
+interface IGoldenFlowerToken {
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
@@ -61,7 +61,7 @@ contract GoldenFlower {
     // 最大房间容量；具体房间是 3 人场还是 5 人场，由 _configOf(roomId) 决定。
     uint256 public constant ROOM_PLAYERS = 5;
 
-    IERC20 public immutable token;
+    IGoldenFlowerToken public immutable token;
     address public immutable dealer;
     address public immutable rewardPool;
     uint256 public immutable tokenUnit;
@@ -137,10 +137,10 @@ contract GoldenFlower {
         if (_token == address(0)) revert InvalidTokenReceiver();
         if (_dealer == address(0)) revert InvalidRecipient();
         if (_rewardPool == address(0)) revert InvalidPoolAddress();
-        token = IERC20(_token);
+        token = IGoldenFlowerToken(_token);
         dealer = _dealer;
         rewardPool = _rewardPool;
-        tokenUnit = 10 ** uint256(IERC20(_token).decimals());
+        tokenUnit = 10 ** uint256(IGoldenFlowerToken(_token).decimals());
 
         for (uint256 i = 1; i <= TOTAL_ROOMS; i++) {
             rooms[i].status = RoomStatus.Waiting;
@@ -469,12 +469,12 @@ contract GoldenFlower {
 
     function _depositRankReward(uint256 amount) internal {
         if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
-        IGameRewardPool(rewardPool).depositRankReward(amount);
+        IGoldenFlowerRewardPool(rewardPool).depositRankReward(amount);
     }
 
     function _depositReplenishReward(uint256 amount) internal {
         if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
-        IGameRewardPool(rewardPool).depositReplenishReward(amount);
+        IGoldenFlowerRewardPool(rewardPool).depositReplenishReward(amount);
     }
 
     function _sumRange(

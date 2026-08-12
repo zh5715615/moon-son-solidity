@@ -1,0 +1,29 @@
+{
+  "name": "moon-son-solidity",
+  "version": "1.0.0",
+  "private": true,
+  "description": "弈元游戏合约 Truffle 工程",
+  "scripts": {
+    "compile": "truffle compile --all",
+    "test": "truffle test --network test",
+    "ganache": "ganache --server.host 127.0.0.1 --server.port 8545 --chain.networkId 5777",
+    "migrate:local": "truffle migrate --reset --network development",
+    "migrate:dashboard": "truffle migrate --reset --network dashboard",
+    "deploy:pool:testnet": "truffle exec scripts/deploy-game-reward-pool.js --network bscTestnet",
+    "deploy:games:testnet": "truffle exec scripts/deploy-game-contracts.js --network bscTestnet",
+    "deploy:bull:testnet": "truffle exec scripts/deploy-bullfigthing.js --network bscTestnet",
+    "deployments": "node scripts/list-deployments.js",
+    "console:local": "truffle console --network development"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "5.0.2",
+    "@truffle/hdwallet-provider": "2.1.15",
+    "dotenv": "16.4.5",
+    "ganache": "7.9.2",
+    "solc": "0.8.21",
+    "truffle": "5.11.5"
+  },
+  "engines": {
+    "node": ">=18 <23"
+  }
+}

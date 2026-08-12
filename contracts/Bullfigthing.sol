@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface IERC20 {
+interface IBullToken {
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
     function approve(address spender, uint256 amount) external returns (bool);
@@ -9,26 +9,26 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-interface IERC20Metadata is IERC20 {
+interface IBullTokenMetadata is IBullToken {
     function decimals() external view returns (uint8);
 }
 
-library SafeERC20 {
-    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+library SafeBullERC20 {
+    function safeTransfer(IBullToken token, address to, uint256 value) internal {
         require(token.transfer(to, value), "SafeERC20: transfer failed");
     }
 
-    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
+    function safeTransferFrom(IBullToken token, address from, address to, uint256 value) internal {
         require(token.transferFrom(from, to, value), "SafeERC20: transferFrom failed");
     }
 
-    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
+    function safeIncreaseAllowance(IBullToken token, address spender, uint256 value) internal {
         uint256 currentAllowance = token.allowance(address(this), spender);
         require(token.approve(spender, currentAllowance + value), "SafeERC20: approve failed");
     }
 }
 
-abstract contract ReentrancyGuard {
+abstract contract BullReentrancyGuard {
     uint256 private constant NOT_ENTERED = 1;
     uint256 private constant ENTERED = 2;
     uint256 private _status;
@@ -45,7 +45,7 @@ abstract contract ReentrancyGuard {
     }
 }
 
-abstract contract Ownable {
+abstract contract BullOwnable {
     address private _owner;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -73,17 +73,17 @@ abstract contract Ownable {
     }
 }
 
-interface IGameRewardPool {
+interface IBullRewardPool {
     function depositRankReward(uint256 amount) external;
     function depositReplenishReward(uint256 amount) external;
 }
 
-contract Bullfigthing is Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
+contract Bullfigthing is BullOwnable, BullReentrancyGuard {
+    using SafeBullERC20 for IBullToken;
 
     uint256 public dpegTokenDecimals;
 
-    IERC20Metadata public dpegToken;
+    IBullTokenMetadata public dpegToken;
     address public dpegTokenAddress;
 
     address public gameRewardPoolAddress;
@@ -126,12 +126,12 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
     event RoomReset(uint256 indexed level, uint256 newRound);
     event RewardPoolChanged(address indexed oldRewardPool, address indexed newRewardPool);
 
-    constructor(address beneficiary, address _gameRewardPoolAddress, address _dpegAddress) payable Ownable(beneficiary) {
+    constructor(address beneficiary, address _gameRewardPoolAddress, address _dpegAddress) payable BullOwnable(beneficiary) {
         require(_gameRewardPoolAddress != address(0), "Reward pool is zero");
         require(_dpegAddress != address(0), "Token is zero");
 
         gameRewardPoolAddress = _gameRewardPoolAddress;
-        dpegToken = IERC20Metadata(_dpegAddress);
+        dpegToken = IBullTokenMetadata(_dpegAddress);
         dpegTokenAddress = _dpegAddress;
         dpegTokenDecimals = 10 ** dpegToken.decimals();
 
@@ -168,9 +168,9 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
         require(roomPlayerInfo[level][msg.sender].account == address(0), "User already in this room");
 
         uint256 roomAmount = room.roomAmount;
-        require(IERC20(dpegTokenAddress).allowance(msg.sender, address(this)) >= roomAmount, "Token allowance is not enough");
+        require(IBullToken(dpegTokenAddress).allowance(msg.sender, address(this)) >= roomAmount, "Token allowance is not enough");
 
-        IERC20 token = IERC20(dpegTokenAddress);
+        IBullToken token = IBullToken(dpegTokenAddress);
         token.safeTransferFrom(msg.sender, address(this), roomAmount);
 
         roomPlayers[level].push(msg.sender);
@@ -224,7 +224,7 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
         uint256 indirectReward = roomAmount * 2 / 100;
         uint256 missingReferralReward = directReward * (userCapacity - directUser.length)
             + indirectReward * (userCapacity - indirectUser.length);
-        IERC20 token = IERC20(dpegTokenAddress);
+        IBullToken token = IBullToken(dpegTokenAddress);
         require(token.balanceOf(address(this)) >= totalAmount, "Contract token balance is not enough");
 
         token.safeTransfer(winner, totalAmount * 70 / 100);
@@ -233,7 +233,7 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
         _transferReferralRewards(token, indirectUser, indirectReward, "Indirect user address is zero");
     }
 
-    function _distributePoolRewards(IERC20 token, uint256 totalAmount, uint256 missingReferralReward) internal {
+    function _distributePoolRewards(IBullToken token, uint256 totalAmount, uint256 missingReferralReward) internal {
         // 基础销毁10%；不存在的直推3%或间推2%也统一转入黑洞地址。
         token.safeTransfer(blackHoleAddress, totalAmount * 10 / 100 + missingReferralReward);
         _depositReplenishReward(totalAmount * 10 / 100);
@@ -241,7 +241,7 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
     }
 
     function _transferReferralRewards(
-        IERC20 token,
+        IBullToken token,
         address[] memory users,
         uint256 amount,
         string memory zeroAddressMessage
@@ -318,14 +318,14 @@ contract Bullfigthing is Ownable, ReentrancyGuard {
     }
 
     function _depositRankReward(uint256 amount) internal {
-        IERC20 token = IERC20(dpegTokenAddress);
+        IBullToken token = IBullToken(dpegTokenAddress);
         token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
-        IGameRewardPool(gameRewardPoolAddress).depositRankReward(amount);
+        IBullRewardPool(gameRewardPoolAddress).depositRankReward(amount);
     }
 
     function _depositReplenishReward(uint256 amount) internal {
-        IERC20 token = IERC20(dpegTokenAddress);
+        IBullToken token = IBullToken(dpegTokenAddress);
         token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
-        IGameRewardPool(gameRewardPoolAddress).depositReplenishReward(amount);
+        IBullRewardPool(gameRewardPoolAddress).depositReplenishReward(amount);
     }
 }

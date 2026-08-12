@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "network": {
+    "name": "BSC Testnet",
+    "truffleNetwork": "bscTestnet",
+    "chainId": 97,
+    "explorer": "https://testnet.bscscan.com"
+  },
+  "deployments": [
+    {
+      "contract": "GameRewardPool",
+      "address": "0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937",
+      "transactionHash": "0xb44ce7e970a2495f6b16ebc6bf1d13600f0bce495cdcbf9119cfd9945d43c2e0",
+      "blockNumber": 124560182,
+      "blockTimestamp": 1786498454,
+      "deployedAtUtc": "2026-08-12T01:34:14.000Z",
+      "deployedAtAsiaShanghai": "2026-08-12 09:34:14 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "token": "0x7ef3D2a397cd368A33d35c52Db42013f691aa7C7"
+      },
+      "gasUsed": 889009,
+      "status": "success"
+    },
+    {
+      "contract": "Landlords",
+      "address": "0x0f41751a4C3cc60147284c21D13816BA28D77389",
+      "transactionHash": "0x9a77d458f101810c5b538b868c9e3933ebd259e9ae987a5facde24ad9151640c",
+      "blockNumber": 124561008,
+      "blockTimestamp": 1786498825,
+      "deployedAtUtc": "2026-08-12T01:40:25.000Z",
+      "deployedAtAsiaShanghai": "2026-08-12 09:40:25 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "token": "0x7ef3D2a397cd368A33d35c52Db42013f691aa7C7",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937"
+      },
+      "gasUsed": 2287039,
+      "status": "success"
+    },
+    {
+      "contract": "GoldenFlower",
+      "address": "0x5E3de6A2256A513711c10a75c6837F3c55F1B9F3",
+      "transactionHash": "0x2148e92e5d6914ece1f640ba86d64fd1e94cda76b496d84d0581ec35fe26ec0d",
+      "blockNumber": 124561027,
+      "blockTimestamp": 1786498834,
+      "deployedAtUtc": "2026-08-12T01:40:34.000Z",
+      "deployedAtAsiaShanghai": "2026-08-12 09:40:34 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "token": "0x7ef3D2a397cd368A33d35c52Db42013f691aa7C7",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937"
+      },
+      "gasUsed": 2224436,
+      "status": "success"
+    },
+    {
+      "contract": "Bullfigthing",
+      "address": "0x10316c0794e61475ef2960f2c51df03Fa35E92c8",
+      "transactionHash": "0x4eb214ae802e53e2cd156b976a58f1e1f62e25713ca82de3c5716d1784119953",
+      "blockNumber": 124561047,
+      "blockTimestamp": 1786498843,
+      "deployedAtUtc": "2026-08-12T01:40:43.000Z",
+      "deployedAtAsiaShanghai": "2026-08-12 09:40:43 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "beneficiary": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937",
+        "token": "0x7ef3D2a397cd368A33d35c52Db42013f691aa7C7"
+      },
+      "gasUsed": 3211876,
+      "status": "success"
+    }
+  ]
+}
