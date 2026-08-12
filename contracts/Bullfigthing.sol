@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./pricing/PancakeV2UsdtQuote.sol";
+
 interface IBullToken {
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
@@ -78,7 +80,7 @@ interface IBullRewardPool {
     function depositReplenishReward(uint256 amount) external;
 }
 
-contract Bullfigthing is BullOwnable, BullReentrancyGuard {
+contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     using SafeBullERC20 for IBullToken;
 
     uint256 public dpegTokenDecimals;
@@ -103,7 +105,7 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
 
     struct RoomInfo {
         uint256 userCapacity;       // 房间人数上限，3人房或5人房
-        uint256 roomAmount;         // 单个玩家入房托管金额
+        uint256 roomAmount;         // 单个玩家入房 USDT 价格（美分，3000 = 30.00 USDT）
         uint256 currentUserNumber;  // 当前已加入人数
         bool enable;                // true=可加入，false=已满员等待结算
     }
@@ -114,6 +116,25 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
         uint256 round;
     }
 
+    struct RewardDistribution {
+        uint256 winner;
+        uint256 directPerUser;
+        uint256 indirectPerUser;
+        uint256 replenish;
+        uint256 rank;
+        uint256 blackHole;
+    }
+
+    struct TokenDistribution {
+        uint256 winner;
+        uint256 directPerUser;
+        uint256 indirectPerUser;
+        uint256 replenish;
+        uint256 rank;
+        uint256 blackHole;
+        uint256 totalPaid;
+    }
+
     mapping(uint256 => RoomInfo) public rooms;
     mapping(uint256 => uint256) public contractRounds;
     mapping(uint256 => address[]) private roomPlayers;
@@ -122,7 +143,15 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
 
     event UserEnteredRoom(address indexed user, uint256 indexed level, uint256 amount);
     event UserEnteredRoomWithRound(address indexed user, uint256 indexed level, uint256 amount, uint256 round);
+    event UsdtPriceQuoted(address indexed player, uint256 usdtPriceCents, uint256 tokenAmount);
     event RoomFinished(uint256 indexed level, uint256 indexed round, address indexed winner, uint256 totalAmount);
+    event SettlementModeSelected(
+        uint256 indexed level,
+        bool usdtMode,
+        uint256 escrowToken,
+        uint256 quotedTokenRequired,
+        uint256 paidToken
+    );
     event RoomReset(uint256 indexed level, uint256 newRound);
     event RewardPoolChanged(address indexed oldRewardPool, address indexed newRewardPool);
 
@@ -137,13 +166,13 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
 
         // 0-4: 5 人 3K 房；5-9: 5 人 6K 房；10-14: 5 人 12K 房。
         for (uint256 level = 0; level < 5; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_1 * dpegTokenDecimals);
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_1);
         }
         for (uint256 level = 5; level < 10; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_2 * dpegTokenDecimals);
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_2);
         }
         for (uint256 level = 10; level < TOTAL_ROOMS; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_3 * dpegTokenDecimals);
+            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_3);
         }
     }
 
@@ -167,14 +196,14 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
         require(userRoomLevels[msg.sender] == 0 || !_isUserInRoom(msg.sender), "User already in room");
         require(roomPlayerInfo[level][msg.sender].account == address(0), "User already in this room");
 
-        uint256 roomAmount = room.roomAmount;
-        require(IBullToken(dpegTokenAddress).allowance(msg.sender, address(this)) >= roomAmount, "Token allowance is not enough");
+        uint256 tokenAmount = _quoteTokenAmount(room.roomAmount);
+        require(IBullToken(dpegTokenAddress).allowance(msg.sender, address(this)) >= tokenAmount, "Token allowance is not enough");
 
         IBullToken token = IBullToken(dpegTokenAddress);
-        token.safeTransferFrom(msg.sender, address(this), roomAmount);
+        token.safeTransferFrom(msg.sender, address(this), tokenAmount);
 
         roomPlayers[level].push(msg.sender);
-        roomPlayerInfo[level][msg.sender] = PlayerInfo(msg.sender, roomAmount, contractRounds[level]);
+        roomPlayerInfo[level][msg.sender] = PlayerInfo(msg.sender, tokenAmount, contractRounds[level]);
         userRoomLevels[msg.sender] = level + 1;
 
         room.currentUserNumber++;
@@ -182,8 +211,9 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
             room.enable = false;
         }
 
-        emit UserEnteredRoom(msg.sender, level, roomAmount);
-        emit UserEnteredRoomWithRound(msg.sender, level, roomAmount, contractRounds[level]);
+        emit UsdtPriceQuoted(msg.sender, room.roomAmount, tokenAmount);
+        emit UserEnteredRoom(msg.sender, level, tokenAmount);
+        emit UserEnteredRoomWithRound(msg.sender, level, tokenAmount, contractRounds[level]);
     }
 
     receive() external payable {}
@@ -203,41 +233,127 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
         require(directUser.length <= userCapacity, "Direct user list too long");
         require(indirectUser.length <= userCapacity, "Indirect user list too long");
 
-        uint256 roomAmount = rooms[level].roomAmount;
-        uint256 totalAmount = roomAmount * userCapacity;
-        _distributeRewards(totalAmount, roomAmount, winner, directUser, indirectUser);
+        uint256 escrowToken = _roomEscrow(level);
+        uint256 totalUsdtCents = rooms[level].roomAmount * userCapacity;
+        (uint256 paidToken, uint256 quotedTokenRequired, bool usdtMode) = _distributeRewards(
+            totalUsdtCents,
+            escrowToken,
+            userCapacity,
+            winner,
+            directUser,
+            indirectUser
+        );
 
         uint256 finishedRound = contractRounds[level];
         _resetRoom(level);
-        emit RoomFinished(level, finishedRound, winner, totalAmount);
+        emit SettlementModeSelected(level, usdtMode, escrowToken, quotedTokenRequired, paidToken);
+        emit RoomFinished(level, finishedRound, winner, totalUsdtCents);
     }
 
     function _distributeRewards(
         uint256 totalAmount,
-        uint256 roomAmount,
+        uint256 escrowToken,
+        uint256 userCapacity,
         address winner,
         address[] memory directUser,
         address[] memory indirectUser
-    ) internal {
-        uint256 userCapacity = totalAmount / roomAmount;
-        uint256 directReward = roomAmount * 3 / 100;
-        uint256 indirectReward = roomAmount * 2 / 100;
-        uint256 missingReferralReward = directReward * (userCapacity - directUser.length)
-            + indirectReward * (userCapacity - indirectUser.length);
+    ) internal returns (uint256 paidToken, uint256 quotedTokenRequired, bool usdtMode) {
+        RewardDistribution memory usdt = _calculateDistribution(
+            totalAmount,
+            userCapacity,
+            directUser.length,
+            indirectUser.length
+        );
+        TokenDistribution memory reward = _quoteDistribution(usdt, directUser.length, indirectUser.length);
+        quotedTokenRequired = reward.totalPaid;
+        usdtMode = quotedTokenRequired <= escrowToken;
+        if (!usdtMode) {
+            reward = _calculateTokenFallback(
+                escrowToken,
+                userCapacity,
+                directUser.length,
+                indirectUser.length
+            );
+        }
         IBullToken token = IBullToken(dpegTokenAddress);
-        require(token.balanceOf(address(this)) >= totalAmount, "Contract token balance is not enough");
+        require(token.balanceOf(address(this)) >= reward.totalPaid, "Contract token balance is not enough");
 
-        token.safeTransfer(winner, totalAmount * 70 / 100);
-        _distributePoolRewards(token, totalAmount, missingReferralReward);
-        _transferReferralRewards(token, directUser, directReward, "Direct user address is zero");
-        _transferReferralRewards(token, indirectUser, indirectReward, "Indirect user address is zero");
+        token.safeTransfer(winner, reward.winner);
+        _distributePoolRewards(token, reward.blackHole, reward.replenish, reward.rank);
+        _transferReferralRewards(token, directUser, reward.directPerUser, "Direct user address is zero");
+        _transferReferralRewards(token, indirectUser, reward.indirectPerUser, "Indirect user address is zero");
+        return (reward.totalPaid, quotedTokenRequired, usdtMode);
     }
 
-    function _distributePoolRewards(IBullToken token, uint256 totalAmount, uint256 missingReferralReward) internal {
-        // 基础销毁10%；不存在的直推3%或间推2%也统一转入黑洞地址。
-        token.safeTransfer(blackHoleAddress, totalAmount * 10 / 100 + missingReferralReward);
-        _depositReplenishReward(totalAmount * 10 / 100);
-        _depositRankReward(totalAmount * 5 / 100);
+    function _calculateDistribution(
+        uint256 totalAmount,
+        uint256 userCapacity,
+        uint256 directCount,
+        uint256 indirectCount
+    ) internal pure returns (RewardDistribution memory reward) {
+        reward.winner = totalAmount * 70 / 100;
+        reward.replenish = totalAmount * 10 / 100;
+        reward.rank = totalAmount * 5 / 100;
+        reward.directPerUser = (totalAmount * 3 / 100) / userCapacity;
+        reward.indirectPerUser = (totalAmount * 2 / 100) / userCapacity;
+        uint256 paidReferralAmount = reward.directPerUser * directCount
+            + reward.indirectPerUser * indirectCount;
+        reward.blackHole = totalAmount
+            - reward.winner
+            - reward.replenish
+            - reward.rank
+            - paidReferralAmount;
+    }
+
+    function _quoteDistribution(
+        RewardDistribution memory usdt,
+        uint256 directCount,
+        uint256 indirectCount
+    ) internal view returns (TokenDistribution memory tokenAmount) {
+        tokenAmount.winner = _quoteTokenAmount(usdt.winner);
+        tokenAmount.replenish = _quoteTokenAmount(usdt.replenish);
+        tokenAmount.rank = _quoteTokenAmount(usdt.rank);
+        tokenAmount.blackHole = _quoteTokenAmount(usdt.blackHole);
+        if (directCount > 0) tokenAmount.directPerUser = _quoteTokenAmount(usdt.directPerUser);
+        if (indirectCount > 0) tokenAmount.indirectPerUser = _quoteTokenAmount(usdt.indirectPerUser);
+        tokenAmount.totalPaid = tokenAmount.winner
+            + tokenAmount.replenish
+            + tokenAmount.rank
+            + tokenAmount.blackHole
+            + tokenAmount.directPerUser * directCount
+            + tokenAmount.indirectPerUser * indirectCount;
+    }
+
+    function _calculateTokenFallback(
+        uint256 escrowToken,
+        uint256 userCapacity,
+        uint256 directCount,
+        uint256 indirectCount
+    ) internal pure returns (TokenDistribution memory tokenAmount) {
+        tokenAmount.winner = escrowToken * 70 / 100;
+        tokenAmount.replenish = escrowToken * 10 / 100;
+        tokenAmount.rank = escrowToken * 5 / 100;
+        tokenAmount.directPerUser = (escrowToken * 3 / 100) / userCapacity;
+        tokenAmount.indirectPerUser = (escrowToken * 2 / 100) / userCapacity;
+        uint256 paidReferralAmount = tokenAmount.directPerUser * directCount
+            + tokenAmount.indirectPerUser * indirectCount;
+        tokenAmount.blackHole = escrowToken
+            - tokenAmount.winner
+            - tokenAmount.replenish
+            - tokenAmount.rank
+            - paidReferralAmount;
+        tokenAmount.totalPaid = escrowToken;
+    }
+
+    function _distributePoolRewards(
+        IBullToken token,
+        uint256 blackHoleAmount,
+        uint256 replenishAmount,
+        uint256 rankAmount
+    ) internal {
+        token.safeTransfer(blackHoleAddress, blackHoleAmount);
+        _depositReplenishReward(replenishAmount);
+        _depositRankReward(rankAmount);
     }
 
     function _transferReferralRewards(
@@ -304,6 +420,13 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
         emit RoomReset(level, contractRounds[level]);
     }
 
+    function _roomEscrow(uint256 level) internal view returns (uint256 totalAmount) {
+        address[] storage players = roomPlayers[level];
+        for (uint256 i = 0; i < players.length; i++) {
+            totalAmount += roomPlayerInfo[level][players[i]].amount;
+        }
+    }
+
     function _isRoomPlayer(uint256 level, address player) internal view returns (bool) {
         return roomPlayerInfo[level][player].account != address(0);
     }
@@ -327,5 +450,9 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard {
         IBullToken token = IBullToken(dpegTokenAddress);
         token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
         IBullRewardPool(gameRewardPoolAddress).depositReplenishReward(amount);
+    }
+
+    function _paymentToken() internal view override returns (address) {
+        return dpegTokenAddress;
     }
 }

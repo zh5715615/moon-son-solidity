@@ -14,7 +14,7 @@ module.exports = {
       provider: () => {
         if (!testProvider) {
           testProvider = ganache.provider({
-            chain: { chainId: 1337, networkId: 1337 },
+            chain: { chainId: 97, networkId: 1337 },
             logging: { quiet: true },
             wallet: { totalAccounts: 20, defaultBalance: 1_000 },
           });

@@ -57,6 +57,43 @@ npm run migrate:dashboard
 3. `GoldenFlower(token, dealer, rewardPool)`
 4. `Bullfigthing(owner, rewardPool, token)`
 
+## USDT 计价与 Token 支付
+
+三个游戏合约的构造参数保持不变。房间配置金额使用两位小数的 USDT
+美分整数，例如 `3000` 表示 `30.00 USDT`。玩家入房时，合约通过
+PancakeSwap V2 的 Token/USDT 直连池调用 `getAmountsIn`，计算达到该
+USDT 价值所需的业务 Token 数量，并实际托管业务 Token。
+
+链上地址由 `block.chainid` 自动选择：
+
+| Chain ID | 网络 | USDT | PancakeSwap V2 Router |
+| ---: | --- | --- | --- |
+| 56 | BSC Mainnet | `0x55d398326f99059fF775485246999027B3197955` | `0x10ED43C718714eb63d5aA57B78B54704E256024E` |
+| 97 | BSC Testnet | `0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5` | `0xD99D1c33F9fC3444f8101754aBC46c52416550D1` |
+
+前端入房流程：
+
+1. 读取房间配置中的 USDT 美分价格。
+2. 调用游戏合约 `quoteTokenAmount(usdtPriceCents)` 获取当前 Token 报价。
+3. 只授权本次所需 Token 数量（可加入很小容差）。
+4. 调用 `joinRoom` 或 `enterTheRoom`。
+
+不要使用无限授权。PancakeSwap V2 储备现货报价可能在交易排序期间变化或被操纵；
+精确/有限授权会作为用户支付上限，使异常报价交易回滚。报价使用直连池，目标链上
+必须存在足够的 Token/USDT V2 流动性。
+
+结算同样以 USDT 美分记账。斗地主和炸金花 `settleRoom` 中的玩家押注、赢家、
+直推和间推金额均为 USDT 美分；牛牛根据房间 USDT 价格自动计算总额。合约在
+结算交易执行时，分别对各类 U 奖励重新调用 V2 报价，再向不同地址支付 Token。
+
+合约会先计算完整 U 结算所需的 Token。若该数量不超过本局实际托管 Token，
+采用结算时 U 报价；若超过，则自动降级为 Token 比例模式，使用本局实际 Token
+按同样的 70%/10%/10%/5%/3%/2% 规则分配。模式判断不会挪用其他房间资金。
+
+`SettlementModeSelected` 事件记录 `usdtMode`、本局托管 Token、U 报价所需
+Token 和最终支付 Token。U 模式下的多余 Token 留在游戏合约中，但不会被纳入
+其他房间的模式判断。取消房间不使用新报价，原样退回玩家入房时托管的 Token。
+
 部署后的 ABI 和网络地址位于 `build/contracts/`。`dealer` 负责斗地主和炸金花结算；`Bullfigthing` 的 owner 负责牛牛结算；奖励池 owner 负责登记用户可领取奖励。
 
 ## 常用命令

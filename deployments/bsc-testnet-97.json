@@ -72,6 +72,23 @@
       },
       "gasUsed": 3211876,
       "status": "success"
+    },
+    {
+      "contract": "Bullfigthing",
+      "address": "0x6D89c17983f6ff48a3203397e5F45Bd32cBBA335",
+      "transactionHash": "0x93ebae8e3adba005d6f8d80360072fb260c1f961d50ccbbb8924403491d640ad",
+      "blockNumber": 124570008,
+      "blockTimestamp": 1786502875,
+      "deployedAtUtc": "2026-08-12T02:47:55.000Z",
+      "deployedAtAsiaShanghai": "2026-08-12 10:47:55 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "beneficiary": "0x7c92cd77d3fba3ea33f7d94254bf3e23b25513c2",
+        "rewardPool": "0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937",
+        "token": "0x7ef3D2a397cd368A33d35c52Db42013f691aa7C7"
+      },
+      "gasUsed": 3500992,
+      "status": "success"
     }
   ]
 }
