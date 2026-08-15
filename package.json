@@ -12,6 +12,8 @@
     "deploy:pool:testnet": "truffle exec scripts/deploy-game-reward-pool.js --network bscTestnet",
     "deploy:games:testnet": "truffle exec scripts/deploy-game-contracts.js --network bscTestnet",
     "deploy:bull:testnet": "truffle exec scripts/deploy-bullfigthing.js --network bscTestnet",
+    "deploy:yion:testnet": "truffle exec scripts/deploy-yion-liquidity.js --network bscTestnet",
+    "deploy:yion-ecosystem:testnet": "truffle exec scripts/deploy-yion-ecosystem.js --network bscTestnet",
     "deployments": "node scripts/list-deployments.js",
     "console:local": "truffle console --network development"
   },

@@ -266,11 +266,18 @@ contract GoldenFlower is PancakeV2UsdtQuote {
 
         if (totalBetUsdtCents == 0) revert InvalidBetTotal();
         _validateReferralTotals(totalBetUsdtCents, values);
-        uint256 quotedTokenRequired = _quoteUsdtSettlement(roomId, values, totalBetUsdtCents);
+        uint256 totalEscrowUsdtCents = _roomUsdtEscrow(roomId);
+        uint256 quotedTokenRequired = _quoteTokenAmount(totalEscrowUsdtCents);
         bool usdtMode = quotedTokenRequired <= room.escrow;
-        uint256 totalPaidToken = usdtMode
-            ? _executeUsdtSettlement(roomId, addrs, values, totalBetUsdtCents)
-            : _executeTokenSettlement(roomId, addrs, values, totalBetUsdtCents);
+        uint256 settlementToken = usdtMode ? quotedTokenRequired : room.escrow;
+        uint256 totalPaidToken = _executeSettlement(
+            roomId,
+            addrs,
+            values,
+            totalBetUsdtCents,
+            totalEscrowUsdtCents,
+            settlementToken
+        );
 
         emit SettlementModeSelected(roomId, usdtMode, room.escrow, quotedTokenRequired, totalPaidToken);
         emit RoomSettled(roomId, round, totalBetUsdtCents, totalPaidToken);
@@ -451,40 +458,31 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         }
     }
 
-    function _quoteUsdtSettlement(
-        uint256 roomId,
-        uint256[] calldata values,
-        uint256 totalBetUsdtCents
-    ) internal view returns (uint256 requiredToken) {
-        Room storage room = rooms[roomId];
-        for (uint256 i = 0; i < room.playerCount; i++) {
-            uint256 refundUsdtCents = players[roomId][room.playerAddrs[i]].usdtDeposit - values[i];
-            if (refundUsdtCents > 0) requiredToken += _quoteTokenAmount(refundUsdtCents);
-        }
-        requiredToken += _quoteBaseSettlement(totalBetUsdtCents);
-        for (uint256 i = 0; i < values[5] + values[6]; i++) {
-            if (values[i + 7] > 0) requiredToken += _quoteTokenAmount(values[i + 7]);
-        }
-    }
-
-    function _executeUsdtSettlement(
+    function _executeSettlement(
         uint256 roomId,
         address[] calldata addrs,
         uint256[] calldata values,
-        uint256 totalBetUsdtCents
+        uint256 totalBetUsdtCents,
+        uint256 totalEscrowUsdtCents,
+        uint256 settlementToken
     ) internal returns (uint256 paidToken) {
-        paidToken = _refundPlayersInUsdtMode(roomId, values);
-        paidToken += _payBaseSettlement(totalBetUsdtCents, addrs[0], addrs[1]);
-        paidToken += _payMappedRecipients(addrs, values);
+        uint256 refundToken = _refundPlayers(
+            roomId,
+            values,
+            totalEscrowUsdtCents,
+            settlementToken
+        );
+        uint256 totalBetToken = settlementToken - refundToken;
+        _distributeBetSettlement(addrs, values, totalBetUsdtCents, totalBetToken);
+        return settlementToken;
     }
 
-    function _executeTokenSettlement(
-        uint256 roomId,
+    function _distributeBetSettlement(
         address[] calldata addrs,
         uint256[] calldata values,
-        uint256 totalBetUsdtCents
-    ) internal returns (uint256 paidToken) {
-        (uint256 totalBetToken, uint256 refundToken) = _refundPlayersInTokenMode(roomId, values);
+        uint256 totalBetUsdtCents,
+        uint256 totalBetToken
+    ) internal {
         uint256 winnerToken = totalBetToken * 70 / 100;
         uint256 replenishToken = totalBetToken * 10 / 100;
         uint256 rankToken = totalBetToken * 5 / 100;
@@ -502,38 +500,32 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         _safeTransfer(addrs[1], blackHoleToken);
         _depositReplenishReward(replenishToken);
         _depositRankReward(rankToken);
-        return refundToken + totalBetToken;
     }
 
-    function _refundPlayersInUsdtMode(uint256 roomId, uint256[] calldata values)
+    function _refundPlayers(
+        uint256 roomId,
+        uint256[] calldata values,
+        uint256 totalEscrowUsdtCents,
+        uint256 settlementToken
+    )
         internal
         returns (uint256 totalRefundToken)
     {
         Room storage room = rooms[roomId];
         for (uint256 i = 0; i < room.playerCount; i++) {
             address playerAddress = room.playerAddrs[i];
-            uint256 refundUsdtCents = players[roomId][playerAddress].usdtDeposit - values[i];
-            if (refundUsdtCents > 0) {
-                uint256 refundToken = _quoteTokenAmount(refundUsdtCents);
-                totalRefundToken += refundToken;
-                _safeTransfer(playerAddress, refundToken);
-            }
+            Player storage player = players[roomId][playerAddress];
+            uint256 refundUsdtCents = player.usdtDeposit - values[i];
+            uint256 refundToken = settlementToken * refundUsdtCents / totalEscrowUsdtCents;
+            totalRefundToken += refundToken;
+            if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
         }
     }
 
-    function _refundPlayersInTokenMode(uint256 roomId, uint256[] calldata values)
-        internal
-        returns (uint256 totalBetToken, uint256 totalRefundToken)
-    {
+    function _roomUsdtEscrow(uint256 roomId) internal view returns (uint256 totalUsdtCents) {
         Room storage room = rooms[roomId];
         for (uint256 i = 0; i < room.playerCount; i++) {
-            address playerAddress = room.playerAddrs[i];
-            Player storage player = players[roomId][playerAddress];
-            uint256 betToken = player.deposit * values[i] / player.usdtDeposit;
-            uint256 refundToken = player.deposit - betToken;
-            totalBetToken += betToken;
-            totalRefundToken += refundToken;
-            if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
+            totalUsdtCents += players[roomId][room.playerAddrs[i]].usdtDeposit;
         }
     }
 
@@ -543,52 +535,6 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     ) internal pure {
         if (_sumRange(values, 7, values[5]) != totalBet * 3 / 100) revert InvalidReferralAmount();
         if (_sumRange(values, 7 + values[5], values[6]) != totalBet * 2 / 100) revert InvalidReferralAmount();
-    }
-
-    function _payBaseSettlement(
-        uint256 totalBet,
-        address winner,
-        address blackHole
-    ) internal returns (uint256 paidToken) {
-        uint256 winnerAmount = totalBet * 70 / 100;
-        uint256 directAmount = totalBet * 3 / 100;
-        uint256 indirectAmount = totalBet * 2 / 100;
-        uint256 replenishAmount = totalBet * 10 / 100;
-        uint256 rankAmount = totalBet * 5 / 100;
-        uint256 blackHoleAmount = totalBet
-            - winnerAmount
-            - directAmount
-            - indirectAmount
-            - replenishAmount
-            - rankAmount;
-
-        uint256 winnerToken = _quoteTokenAmount(winnerAmount);
-        uint256 blackHoleToken = _quoteTokenAmount(blackHoleAmount);
-        uint256 replenishToken = _quoteTokenAmount(replenishAmount);
-        uint256 rankToken = _quoteTokenAmount(rankAmount);
-        _safeTransfer(winner, winnerToken);
-        _safeTransfer(blackHole, blackHoleToken);
-        _depositReplenishReward(replenishToken);
-        _depositRankReward(rankToken);
-        return winnerToken + blackHoleToken + replenishToken + rankToken;
-    }
-
-    function _quoteBaseSettlement(uint256 totalBet) internal view returns (uint256 requiredToken) {
-        uint256 winnerAmount = totalBet * 70 / 100;
-        uint256 directAmount = totalBet * 3 / 100;
-        uint256 indirectAmount = totalBet * 2 / 100;
-        uint256 replenishAmount = totalBet * 10 / 100;
-        uint256 rankAmount = totalBet * 5 / 100;
-        uint256 blackHoleAmount = totalBet
-            - winnerAmount
-            - directAmount
-            - indirectAmount
-            - replenishAmount
-            - rankAmount;
-        return _quoteTokenAmount(winnerAmount)
-            + _quoteTokenAmount(blackHoleAmount)
-            + _quoteTokenAmount(replenishAmount)
-            + _quoteTokenAmount(rankAmount);
     }
 
     function _hasDuplicateRecipient(address[] calldata recipients, uint256 index) internal pure returns (bool) {
@@ -616,20 +562,6 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     ) internal pure returns (uint256 total) {
         for (uint256 i = 0; i < count; i++) {
             total += amounts[start + i];
-        }
-    }
-
-    function _payMappedRecipients(address[] calldata addrs, uint256[] calldata values)
-        internal
-        returns (uint256 paidToken)
-    {
-        for (uint256 i = 0; i < values[5] + values[6]; i++) {
-            if (addrs[i + 2] == address(0)) revert InvalidRecipient();
-            if (values[i + 7] > 0) {
-                uint256 tokenAmount = _quoteTokenAmount(values[i + 7]);
-                _safeTransfer(addrs[i + 2], tokenAmount);
-                paidToken += tokenAmount;
-            }
         }
     }
 

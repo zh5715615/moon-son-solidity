@@ -24,6 +24,24 @@
 - Token decimals：2
 - GameRewardPool：`0x720b0dA83e69Fa7f4f2297a9e45B166AeeC3E937`
 
+## YION 测试网发行与流动性
+
+- 最新 YION（8 位白名单版）：`0x94e458dAf76704045C790B8211f1EF565f6835bb`
+- 名称/符号：`YION` / `YION`
+- decimals：8
+- 固定总量：100,000,000 YION；构造时一次性铸造，无增发入口。
+- PancakeSwap V2 YION/USDT Pair：`0xeceC6FE6E1175585311634746300C04C479fA739`
+- 测试网 USDT：`0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5`
+- 初始储备：100,000,000 YION + 10,000 USDT。
+- 初始比例：`1 USDT = 10,000 YION`。
+- 全部 YION 已进入流动性池，LP Token 由部署账户持有。
+- Pair 激活后前 30 分钟仅允许代码内写死的 100 个白名单地址交易；单笔按
+  PancakeSwap 实时报价严格小于 200 USDT，并禁止普通转账/其他 Pair 绕过。
+- 30 分钟结束后限制自动永久失效，所有地址和金额开放。
+- 上一版 18 位 YION `0x9e6C...cE3a` 及 Pair `0x92F4...073F` 仍保留在链上，
+  但不再是最新版本。
+- 当前三个游戏合约仍使用原业务 Token `0x7ef3...a7C7`，未切换到 YION。
+
 ## 游戏合约计价规则
 
 - 三个游戏合约构造函数保持不变。

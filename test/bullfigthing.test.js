@@ -7,6 +7,34 @@ contract("Bullfigthing", (accounts) => {
   const players = [winner, player2, player3, player4, player5];
   const tokens = (value) => web3.utils.toWei(String(value), "ether");
 
+  it("uses the current USDT-equivalent token amount when the token price rises", async () => {
+    const token = await MockToken.new({ from: owner });
+    const pool = await GameRewardPool.new(token.address, { from: owner });
+    const game = await Bullfigthing.new(owner, pool.address, token.address, { from: owner });
+    const entryAmount = tokens(30);
+
+    for (const player of players) {
+      await token.mint(player, entryAmount, { from: owner });
+      await token.approve(game.address, entryAmount, { from: player });
+      await game.enterTheRoom(0, { from: player });
+    }
+
+    // The same 150 USDT is now worth 120 tokens, so only 120 tokens are paid.
+    await game.setQuoteBps(8_000, { from: owner });
+    const beforeWinner = await token.balanceOf(winner);
+    const settlement = await game.sendInstantReward(0, winner, [], [], { from: owner });
+    const event = settlement.logs.find((log) => log.event === "SettlementModeSelected");
+
+    assert.equal(event.args.usdtMode, true);
+    assert.equal(event.args.escrowToken.toString(), tokens(150));
+    assert.equal(event.args.quotedTokenRequired.toString(), tokens(120));
+    assert.equal(event.args.paidToken.toString(), tokens(120));
+    assert.equal((await token.balanceOf(winner)).sub(beforeWinner).toString(), tokens(84));
+    assert.equal((await pool.rankPoolBalance()).toString(), tokens(6));
+    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(12));
+    assert.equal((await token.balanceOf(game.address)).toString(), tokens(30));
+  });
+
   it("settles a full room and funds both reward pools", async () => {
     const token = await MockToken.new({ from: owner });
     const pool = await GameRewardPool.new(token.address, { from: owner });

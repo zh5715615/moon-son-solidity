@@ -45,6 +45,24 @@ function renderSummary(registry) {
       `${item.blockNumber} | \`${short(item.deployer)}\` |`
     );
   }
+
+  if (registry.liquidityPools && registry.liquidityPools.length > 0) {
+    lines.push(
+      "",
+      "## 流动性池记录",
+      "",
+      "| 创建时间（北京时间） | 交易对 | Pair 地址 | 添加流动性交易 | 初始价格 | LP 持有人 |",
+      "| --- | --- | --- | --- | --- | --- |"
+    );
+    for (const item of registry.liquidityPools) {
+      lines.push(
+        `| ${item.createdAtAsiaShanghai} | ${item.pairName} | ` +
+        `[${short(item.pair)}](${explorer}/address/${item.pair}) | ` +
+        `[${short(item.transactionHash)}](${explorer}/tx/${item.transactionHash}) | ` +
+        `${item.initialPrice} | \`${short(item.provider)}\` |`
+      );
+    }
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -82,4 +100,89 @@ async function recordDeployment({ web3, contract, instance, deployer, constructo
   console.log(`Deployment recorded in ${path.relative(ROOT, REGISTRY)}`);
 }
 
-module.exports = { recordDeployment };
+async function recordLiquidity({
+  web3,
+  pair,
+  token,
+  quoteToken,
+  router,
+  provider,
+  transactionHash,
+  tokenAmount,
+  quoteTokenAmount,
+  lpTokens,
+  initialPrice,
+  activationTransactionHash,
+  restrictedUntil,
+}) {
+  const receipt = await web3.eth.getTransactionReceipt(transactionHash);
+  if (!receipt || !receipt.status) {
+    throw new Error(`Cannot record unsuccessful liquidity transaction ${transactionHash}`);
+  }
+  const block = await web3.eth.getBlock(receipt.blockNumber);
+  const timestamp = Number(block.timestamp);
+  const registry = JSON.parse(fs.readFileSync(REGISTRY, "utf8"));
+  registry.liquidityPools = registry.liquidityPools || [];
+  if (registry.liquidityPools.some((item) => item.transactionHash.toLowerCase() === transactionHash.toLowerCase())) {
+    console.log(`Liquidity already recorded: ${transactionHash}`);
+    return;
+  }
+
+  registry.liquidityPools.push({
+    pairName: "YION/USDT",
+    pair,
+    token,
+    quoteToken,
+    router,
+    provider,
+    transactionHash,
+    blockNumber: Number(receipt.blockNumber),
+    blockTimestamp: timestamp,
+    createdAtUtc: new Date(timestamp * 1000).toISOString(),
+    createdAtAsiaShanghai: shanghaiTime(timestamp),
+    tokenAmount,
+    quoteTokenAmount,
+    lpTokens,
+    initialPrice,
+    activationTransactionHash,
+    restrictedUntil,
+    gasUsed: Number(receipt.gasUsed),
+    status: "success",
+  });
+
+  fs.writeFileSync(REGISTRY, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+  fs.writeFileSync(SUMMARY, renderSummary(registry), "utf8");
+  console.log(`Liquidity recorded in ${path.relative(ROOT, REGISTRY)}`);
+}
+
+async function recordLiquidityActivation({
+  web3,
+  liquidityTransactionHash,
+  activationTransactionHash,
+  restrictedUntil,
+}) {
+  const receipt = await web3.eth.getTransactionReceipt(activationTransactionHash);
+  if (!receipt || !receipt.status) {
+    throw new Error(`Cannot record unsuccessful activation transaction ${activationTransactionHash}`);
+  }
+  const block = await web3.eth.getBlock(receipt.blockNumber);
+  const timestamp = Number(block.timestamp);
+  const registry = JSON.parse(fs.readFileSync(REGISTRY, "utf8"));
+  registry.liquidityPools = registry.liquidityPools || [];
+  const item = registry.liquidityPools.find(
+    (pool) => pool.transactionHash.toLowerCase() === liquidityTransactionHash.toLowerCase()
+  );
+  if (!item) {
+    throw new Error(`Liquidity record not found for ${liquidityTransactionHash}`);
+  }
+  item.activationTransactionHash = activationTransactionHash;
+  item.activationBlockNumber = Number(receipt.blockNumber);
+  item.activatedAtUtc = new Date(timestamp * 1000).toISOString();
+  item.activatedAtAsiaShanghai = shanghaiTime(timestamp);
+  item.restrictedUntil = restrictedUntil;
+  fs.writeFileSync(REGISTRY, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+  fs.writeFileSync(SUMMARY, renderSummary(registry), "utf8");
+  console.log(`Liquidity activation recorded in ${path.relative(ROOT, REGISTRY)}`);
+}
+
+module.exports = { recordDeployment, recordLiquidity, recordLiquidityActivation };

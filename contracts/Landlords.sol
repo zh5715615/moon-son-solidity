@@ -176,11 +176,19 @@ contract Landlords is PancakeV2UsdtQuote {
         uint256 totalBetUsdtCents = _validateAndSumBets(roomId, values);
         if (totalBetUsdtCents == 0) revert InvalidBetTotal();
         SettlementAmounts memory amount = _calculateSettlement(values, totalBetUsdtCents);
-        uint256 quotedTokenRequired = _quoteUsdtSettlement(roomId, values, amount);
+        uint256 totalEscrowUsdtCents = _roomUsdtEscrow(roomId);
+        uint256 quotedTokenRequired = _quoteTokenAmount(totalEscrowUsdtCents);
         bool usdtMode = quotedTokenRequired <= room.escrow;
-        uint256 totalPaidToken = usdtMode
-            ? _executeUsdtSettlement(roomId, addrs, values, amount)
-            : _executeTokenSettlement(roomId, addrs, values, totalBetUsdtCents);
+        uint256 settlementToken = usdtMode ? quotedTokenRequired : room.escrow;
+        uint256 totalPaidToken = _executeSettlement(
+            roomId,
+            addrs,
+            values,
+            amount.recipientCount,
+            totalBetUsdtCents,
+            totalEscrowUsdtCents,
+            settlementToken
+        );
 
         emit SettlementModeSelected(roomId, usdtMode, room.escrow, quotedTokenRequired, totalPaidToken);
         emit RoomSettled(roomId, room.roundNumber, totalBetUsdtCents, totalPaidToken);
@@ -273,52 +281,23 @@ contract Landlords is PancakeV2UsdtQuote {
         }
     }
 
-    function _quoteUsdtSettlement(
-        uint256 roomId,
-        uint256[] calldata values,
-        SettlementAmounts memory amount
-    ) internal view returns (uint256 requiredToken) {
-        Room storage room = rooms[roomId];
-        for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
-            Player storage player = players[roomId][room.playerAddrs[i]];
-            uint256 refundUsdtCents = player.usdtDeposit - values[i];
-            if (refundUsdtCents > 0) requiredToken += _quoteTokenAmount(refundUsdtCents);
-        }
-        for (uint256 i = 0; i < amount.recipientCount; i++) {
-            if (values[i + 6] > 0) requiredToken += _quoteTokenAmount(values[i + 6]);
-        }
-        requiredToken += _quoteTokenAmount(amount.blackHole);
-        requiredToken += _quoteTokenAmount(amount.replenish);
-        requiredToken += _quoteTokenAmount(amount.rank);
-    }
-
-    function _executeUsdtSettlement(
+    function _executeSettlement(
         uint256 roomId,
         address[] calldata addrs,
         uint256[] calldata values,
-        SettlementAmounts memory amount
+        uint256 recipientCount,
+        uint256 totalBetUsdtCents,
+        uint256 totalEscrowUsdtCents,
+        uint256 settlementToken
     ) internal returns (uint256 paidToken) {
-        paidToken = _refundPlayersInUsdtMode(roomId, values);
-        paidToken += _payMappedRecipients(addrs, values, amount.recipientCount);
-        uint256 blackHoleToken = _quoteTokenAmount(amount.blackHole);
-        uint256 replenishToken = _quoteTokenAmount(amount.replenish);
-        uint256 rankToken = _quoteTokenAmount(amount.rank);
-        _safeTransfer(addrs[0], blackHoleToken);
-        _depositReplenishReward(replenishToken);
-        _depositRankReward(rankToken);
-        paidToken += blackHoleToken + replenishToken + rankToken;
-    }
-
-    function _executeTokenSettlement(
-        uint256 roomId,
-        address[] calldata addrs,
-        uint256[] calldata values,
-        uint256 totalBetUsdtCents
-    ) internal returns (uint256 paidToken) {
-        (uint256 totalBetToken, uint256 refundToken) = _refundPlayersInTokenMode(roomId, values);
-        paidToken = refundToken;
+        uint256 refundToken = _refundPlayers(
+            roomId,
+            values,
+            totalEscrowUsdtCents,
+            settlementToken
+        );
+        uint256 totalBetToken = settlementToken - refundToken;
         uint256 mappedToken;
-        uint256 recipientCount = values[3] + values[4] + values[5];
         for (uint256 i = 0; i < recipientCount; i++) {
             if (addrs[i + 1] == address(0)) revert InvalidRecipient();
             uint256 tokenAmount = totalBetToken * values[i + 6] / totalBetUsdtCents;
@@ -333,7 +312,7 @@ contract Landlords is PancakeV2UsdtQuote {
         _safeTransfer(addrs[0], blackHoleToken);
         _depositReplenishReward(replenishToken);
         _depositRankReward(rankToken);
-        paidToken += totalBetToken;
+        return settlementToken;
     }
 
     function _calculateSettlement(uint256[] calldata values, uint256 totalBet)
@@ -371,21 +350,6 @@ contract Landlords is PancakeV2UsdtQuote {
             - amount.rank;
     }
 
-    function _payMappedRecipients(
-        address[] calldata addrs,
-        uint256[] calldata values,
-        uint256 recipientCount
-    ) internal returns (uint256 paidToken) {
-        for (uint256 i = 0; i < recipientCount; i++) {
-            if (addrs[i + 1] == address(0)) revert InvalidRecipient();
-            if (values[i + 6] > 0) {
-                uint256 tokenAmount = _quoteTokenAmount(values[i + 6]);
-                _safeTransfer(addrs[i + 1], tokenAmount);
-                paidToken += tokenAmount;
-            }
-        }
-    }
-
     function _validateAndSumBets(uint256 roomId, uint256[] calldata values)
         internal
         view
@@ -400,36 +364,30 @@ contract Landlords is PancakeV2UsdtQuote {
         }
     }
 
-    function _refundPlayersInUsdtMode(uint256 roomId, uint256[] calldata values)
+    function _refundPlayers(
+        uint256 roomId,
+        uint256[] calldata values,
+        uint256 totalEscrowUsdtCents,
+        uint256 settlementToken
+    )
         internal
         returns (uint256 totalRefundToken)
     {
         Room storage room = rooms[roomId];
         for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
-            address player = room.playerAddrs[i];
-            uint256 usdtDeposit = players[roomId][player].usdtDeposit;
-            uint256 refundUsdtCents = usdtDeposit - values[i];
-            if (refundUsdtCents > 0) {
-                uint256 refundToken = _quoteTokenAmount(refundUsdtCents);
-                totalRefundToken += refundToken;
-                _safeTransfer(player, refundToken);
-            }
+            address playerAddress = room.playerAddrs[i];
+            Player storage player = players[roomId][playerAddress];
+            uint256 refundUsdtCents = player.usdtDeposit - values[i];
+            uint256 refundToken = settlementToken * refundUsdtCents / totalEscrowUsdtCents;
+            totalRefundToken += refundToken;
+            if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
         }
     }
 
-    function _refundPlayersInTokenMode(uint256 roomId, uint256[] calldata values)
-        internal
-        returns (uint256 totalBetToken, uint256 totalRefundToken)
-    {
+    function _roomUsdtEscrow(uint256 roomId) internal view returns (uint256 totalUsdtCents) {
         Room storage room = rooms[roomId];
         for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
-            address playerAddress = room.playerAddrs[i];
-            Player storage player = players[roomId][playerAddress];
-            uint256 betToken = player.deposit * values[i] / player.usdtDeposit;
-            uint256 refundToken = player.deposit - betToken;
-            totalBetToken += betToken;
-            totalRefundToken += refundToken;
-            if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
+            totalUsdtCents += players[roomId][room.playerAddrs[i]].usdtDeposit;
         }
     }
 

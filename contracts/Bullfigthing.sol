@@ -116,15 +116,6 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         uint256 round;
     }
 
-    struct RewardDistribution {
-        uint256 winner;
-        uint256 directPerUser;
-        uint256 indirectPerUser;
-        uint256 replenish;
-        uint256 rank;
-        uint256 blackHole;
-    }
-
     struct TokenDistribution {
         uint256 winner;
         uint256 directPerUser;
@@ -251,30 +242,24 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     }
 
     function _distributeRewards(
-        uint256 totalAmount,
+        uint256 totalUsdtCents,
         uint256 escrowToken,
         uint256 userCapacity,
         address winner,
         address[] memory directUser,
         address[] memory indirectUser
     ) internal returns (uint256 paidToken, uint256 quotedTokenRequired, bool usdtMode) {
-        RewardDistribution memory usdt = _calculateDistribution(
-            totalAmount,
+        // Quote the whole round once so the mode decision and the final amount
+        // use exactly the same Token/USDT price snapshot.
+        quotedTokenRequired = _quoteTokenAmount(totalUsdtCents);
+        usdtMode = quotedTokenRequired <= escrowToken;
+        uint256 settlementToken = usdtMode ? quotedTokenRequired : escrowToken;
+        TokenDistribution memory reward = _calculateTokenDistribution(
+            settlementToken,
             userCapacity,
             directUser.length,
             indirectUser.length
         );
-        TokenDistribution memory reward = _quoteDistribution(usdt, directUser.length, indirectUser.length);
-        quotedTokenRequired = reward.totalPaid;
-        usdtMode = quotedTokenRequired <= escrowToken;
-        if (!usdtMode) {
-            reward = _calculateTokenFallback(
-                escrowToken,
-                userCapacity,
-                directUser.length,
-                indirectUser.length
-            );
-        }
         IBullToken token = IBullToken(dpegTokenAddress);
         require(token.balanceOf(address(this)) >= reward.totalPaid, "Contract token balance is not enough");
 
@@ -285,64 +270,25 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         return (reward.totalPaid, quotedTokenRequired, usdtMode);
     }
 
-    function _calculateDistribution(
-        uint256 totalAmount,
-        uint256 userCapacity,
-        uint256 directCount,
-        uint256 indirectCount
-    ) internal pure returns (RewardDistribution memory reward) {
-        reward.winner = totalAmount * 70 / 100;
-        reward.replenish = totalAmount * 10 / 100;
-        reward.rank = totalAmount * 5 / 100;
-        reward.directPerUser = (totalAmount * 3 / 100) / userCapacity;
-        reward.indirectPerUser = (totalAmount * 2 / 100) / userCapacity;
-        uint256 paidReferralAmount = reward.directPerUser * directCount
-            + reward.indirectPerUser * indirectCount;
-        reward.blackHole = totalAmount
-            - reward.winner
-            - reward.replenish
-            - reward.rank
-            - paidReferralAmount;
-    }
-
-    function _quoteDistribution(
-        RewardDistribution memory usdt,
-        uint256 directCount,
-        uint256 indirectCount
-    ) internal view returns (TokenDistribution memory tokenAmount) {
-        tokenAmount.winner = _quoteTokenAmount(usdt.winner);
-        tokenAmount.replenish = _quoteTokenAmount(usdt.replenish);
-        tokenAmount.rank = _quoteTokenAmount(usdt.rank);
-        tokenAmount.blackHole = _quoteTokenAmount(usdt.blackHole);
-        if (directCount > 0) tokenAmount.directPerUser = _quoteTokenAmount(usdt.directPerUser);
-        if (indirectCount > 0) tokenAmount.indirectPerUser = _quoteTokenAmount(usdt.indirectPerUser);
-        tokenAmount.totalPaid = tokenAmount.winner
-            + tokenAmount.replenish
-            + tokenAmount.rank
-            + tokenAmount.blackHole
-            + tokenAmount.directPerUser * directCount
-            + tokenAmount.indirectPerUser * indirectCount;
-    }
-
-    function _calculateTokenFallback(
-        uint256 escrowToken,
+    function _calculateTokenDistribution(
+        uint256 settlementToken,
         uint256 userCapacity,
         uint256 directCount,
         uint256 indirectCount
     ) internal pure returns (TokenDistribution memory tokenAmount) {
-        tokenAmount.winner = escrowToken * 70 / 100;
-        tokenAmount.replenish = escrowToken * 10 / 100;
-        tokenAmount.rank = escrowToken * 5 / 100;
-        tokenAmount.directPerUser = (escrowToken * 3 / 100) / userCapacity;
-        tokenAmount.indirectPerUser = (escrowToken * 2 / 100) / userCapacity;
+        tokenAmount.winner = settlementToken * 70 / 100;
+        tokenAmount.replenish = settlementToken * 10 / 100;
+        tokenAmount.rank = settlementToken * 5 / 100;
+        tokenAmount.directPerUser = (settlementToken * 3 / 100) / userCapacity;
+        tokenAmount.indirectPerUser = (settlementToken * 2 / 100) / userCapacity;
         uint256 paidReferralAmount = tokenAmount.directPerUser * directCount
             + tokenAmount.indirectPerUser * indirectCount;
-        tokenAmount.blackHole = escrowToken
+        tokenAmount.blackHole = settlementToken
             - tokenAmount.winner
             - tokenAmount.replenish
             - tokenAmount.rank
             - paidReferralAmount;
-        tokenAmount.totalPaid = escrowToken;
+        tokenAmount.totalPaid = settlementToken;
     }
 
     function _distributePoolRewards(

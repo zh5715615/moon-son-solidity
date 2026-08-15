@@ -83,8 +83,9 @@ USDT 价值所需的业务 Token 数量，并实际托管业务 Token。
 必须存在足够的 Token/USDT V2 流动性。
 
 结算同样以 USDT 美分记账。斗地主和炸金花 `settleRoom` 中的玩家押注、赢家、
-直推和间推金额均为 USDT 美分；牛牛根据房间 USDT 价格自动计算总额。合约在
-结算交易执行时，分别对各类 U 奖励重新调用 V2 报价，再向不同地址支付 Token。
+直推和间推金额均为 USDT 美分；牛牛根据房间 USDT 价格自动计算总额。三个游戏
+都先对整局 USDT 托管总额报价一次，再按选定的 Token 结算总额计算退款与各项奖励，
+确保模式判断与实际支付使用同一价格快照。
 
 合约会先计算完整 U 结算所需的 Token。若该数量不超过本局实际托管 Token，
 采用结算时 U 报价；若超过，则自动降级为 Token 比例模式，使用本局实际 Token
@@ -103,8 +104,26 @@ npm run compile          # 全量编译
 npm test                 # 隔离网络执行测试
 npm run migrate:local    # 重置并部署到本地 8545 节点
 npm run deploy:bull:testnet # 单独部署 Bullfigthing 到配置的测试网
+npm run deploy:yion:testnet # 部署固定总量 YION 并创建测试网 YION/USDT 池
+npm run deploy:yion-ecosystem:testnet # 一键部署 YION、池、奖励池、三个游戏并最后激活
 npm run console:local    # 打开 Truffle 控制台
 ```
+
+## YION
+
+`YION` 是 8 位精度、固定总量的 ERC-20。构造函数一次性向部署账户铸造
+100,000,000 YION，合约没有后续增发入口。测试网部署脚本会在余额预检通过后，
+将全部 YION 与 10,000 测试网 USDT 加入 PancakeSwap V2，初始比例为
+`1 USDT = 10,000 YION`，LP Token 由部署账户持有。
+
+流动性池激活后的前 30 分钟为白名单保护期：只有合约内写死的 100 个地址能通过
+官方 YION/USDT Pair 买卖，单笔按 PancakeSwap 即时报价必须严格小于 200 USDT，
+同时禁止普通地址转账和其他交易对绕过。保护期结束后自动开放所有地址和金额。
+
+一键生态部署脚本严格按以下顺序执行：部署 YION、创建并注入 YION/USDT 池、部署
+绑定 YION 的 `GameRewardPool`、依次部署 `Bullfigthing`、`GoldenFlower` 和
+`Landlords`，最后调用 `activateTrading`。因此30分钟保护倒计时不会在奖励池和游戏
+合约准备完成之前启动。`DEALER_ADDRESS`、`BULL_OWNER_ADDRESS` 未配置时均使用部署账户。
 
 `contracts/mocks/MockToken.sol` 只用于本地开发和测试，不应部署为生产业务代币。
 
