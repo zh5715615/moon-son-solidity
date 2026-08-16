@@ -52,9 +52,9 @@ contract YION is ERC20 {
         router = IYionRouterQuote(routerAddress);
 
         address[100] memory accounts = [
-            address(0xD9F200aFF52895F1bdd221a883071E8BA94C30D0),
-            address(0x7c7c066b6535318e6FE4D2c4DbfB0d23A488B41a),
-            address(0x4464BC8898197f21C7eC3EdC5Bb0AE03799F3423),
+            address(0x7c92cd77d3fba3ea33f7d94254bf3e23b25513c2),
+            address(0x291a2516ab886e947a03de9e48e7c886c6ec3d5c),
+            address(0x3972a203957936e8aba8dbf327096d3b669c908d),
             address(0x048F2BfCA2d75D1bC6DDB9340dd6629dB8A9119e),
             address(0x0b82F5Ca34dC0F08D24948984b3a96a2c9a89094),
             address(0xa27Ccb7c0CB1388077FaCCeFe20e02A733855a39),
