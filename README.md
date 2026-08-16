@@ -261,6 +261,8 @@ Remove-Item Env:YION_ECOSYSTEM_PREFLIGHT_ONLY
 - 初始比例：`1 USDT = 10,000 YION`
 - LP Token：发送给部署账户
 - 白名单：100个地址，硬编码在 `contracts/YION.sol`
+- 买卖手续费：官方 YION/USDT Pair 的买入、卖出均按交易 USDT 报价值收取3% USDT
+- 手续费收款地址：`0xa24bDb249e80574A96D8B02b148E81B9be684675`
 
 ### 8.3 激活前后状态
 
@@ -271,6 +273,8 @@ Remove-Item Env:YION_ECOSYSTEM_PREFLIGHT_ONLY
 | 30分钟后 | 所有地址可交易和转账，不再限制金额和 Pair |
 
 `activateTrading` 只能由部署账户成功调用一次，官方 Pair 设置后不能修改，30分钟限制不能重启或延长。
+
+通过官方 Pair 买卖前，交易者还必须先在 USDT 合约中授权 YION 合约扣取手续费。该授权独立于给 PancakeSwap Router 的 USDT 授权；授权余额不足时，整笔买入或卖出会回滚。手续费按买入所需或卖出可得的 USDT 报价值计算，并额外从交易者钱包转入固定收款地址。
 
 ## 9. 分步部署
 

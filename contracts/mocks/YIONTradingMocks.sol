@@ -2,9 +2,18 @@
 pragma solidity ^0.8.20;
 
 import "../YION.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 interface IMockTransferToken {
     function transfer(address to, uint256 amount) external returns (bool);
+}
+
+contract MockYionUsdt is ERC20 {
+    constructor() ERC20("Mock USDT", "USDT") {}
+
+    function mint(address account, uint256 amount) external {
+        _mint(account, amount);
+    }
 }
 
 contract MockYionRouterQuote {

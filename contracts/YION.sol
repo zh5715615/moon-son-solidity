@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IYionPair {
     function token0() external view returns (address);
@@ -20,6 +22,8 @@ interface IYionRouterQuote {
  * @notice Fixed-supply YION with a one-time 30-minute launch restriction.
  */
 contract YION is ERC20 {
+    using SafeERC20 for IERC20;
+
     error OnlyLauncher();
     error InvalidAddress();
     error InvalidPair();
@@ -34,6 +38,9 @@ contract YION is ERC20 {
     uint256 public constant RESTRICTED_PERIOD = 30 minutes;
     uint256 public constant MAX_TRADE_USDT = 200 ether;
     uint256 public constant WHITELIST_SIZE = 100;
+    uint256 public constant TRADE_FEE_BPS = 300;
+    uint256 private constant BPS_DENOMINATOR = 10_000;
+    address public constant FEE_RECIPIENT = 0xa24bDb249e80574A96D8B02b148E81B9be684675;
 
     address public immutable launcher;
     address public immutable usdt;
@@ -44,6 +51,7 @@ contract YION is ERC20 {
     mapping(address => bool) public whitelist;
 
     event TradingActivated(address indexed pair, uint256 restrictedUntil);
+    event TradeFeePaid(address indexed trader, address indexed recipient, uint256 usdtAmount);
 
     constructor(address usdtAddress, address routerAddress) ERC20("YION", "YION") {
         if (usdtAddress == address(0) || routerAddress == address(0)) revert InvalidAddress();
@@ -191,17 +199,34 @@ contract YION is ERC20 {
         if (from != address(0) && to != address(0)) {
             if (liquidityPair == address(0)) {
                 if (from != launcher && to != launcher) revert TradingNotActivated();
-            } else if (block.timestamp < restrictedUntil) {
+            } else {
                 bool isBuy = from == liquidityPair;
                 bool isSell = to == liquidityPair;
-                if (!isBuy && !isSell) revert RestrictedTransfer();
+                if (block.timestamp < restrictedUntil) {
+                    if (!isBuy && !isSell) revert RestrictedTransfer();
 
-                address trader = isBuy ? to : from;
-                if (!_isWhitelisted(trader)) revert NotWhitelisted();
-                if (_tradeUsdtValue(isBuy, value) >= MAX_TRADE_USDT) revert TradeLimitExceeded();
+                    address trader = isBuy ? to : from;
+                    if (!_isWhitelisted(trader)) revert NotWhitelisted();
+                }
+
+                if (isBuy || isSell) {
+                    address trader = isBuy ? to : from;
+                    uint256 usdtValue = _tradeUsdtValue(isBuy, value);
+                    if (block.timestamp < restrictedUntil && usdtValue >= MAX_TRADE_USDT) {
+                        revert TradeLimitExceeded();
+                    }
+                    _collectTradeFee(trader, usdtValue);
+                }
             }
         }
         super._update(from, to, value);
+    }
+
+    function _collectTradeFee(address trader, uint256 usdtValue) internal {
+        uint256 fee = usdtValue * TRADE_FEE_BPS / BPS_DENOMINATOR;
+        if (fee == 0) return;
+        IERC20(usdt).safeTransferFrom(trader, FEE_RECIPIENT, fee);
+        emit TradeFeePaid(trader, FEE_RECIPIENT, fee);
     }
 
     function _isWhitelisted(address account) internal view virtual returns (bool) {
