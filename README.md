@@ -261,20 +261,27 @@ Remove-Item Env:YION_ECOSYSTEM_PREFLIGHT_ONLY
 - 初始比例：`1 USDT = 10,000 YION`
 - LP Token：发送给部署账户
 - 白名单：100个地址，硬编码在 `contracts/YION.sol`
-- 买卖手续费：官方 YION/USDT Pair 的买入、卖出均按交易 USDT 报价值收取3% USDT
+- 单笔限制：构造时读取 USDT `decimals()`，换算成严格 `< 200 USDT` 的原始单位；正好200 USDT拒绝
+- 买入手续费：官方 Pair 输出的 YION 中扣3%，用户实际收到97%，手续费 YION 直接发送到手续费地址
+- 卖出手续费：用户卖出的 YION 中扣3%，官方 Pair 实际收到97%，手续费 YION 直接发送到手续费地址
 - 手续费收款地址：`0xa24bDb249e80574A96D8B02b148E81B9be684675`
+- 免手续费白名单：`feeExempt` 与前30分钟交易白名单相互独立；部署账户和 Token 合约自身默认免手续费，部署账户可通过 `setFeeExempt` 增删地址
 
 ### 8.3 激活前后状态
 
 | 阶段 | 状态 |
 | --- | --- |
 | 激活前 | 普通用户不能交易或转账；部署账户可以完成首次加池 |
-| 激活后前30分钟 | 仅100个白名单地址可通过官方 Pair 买卖；单笔严格小于200 USDT；禁止普通转账和其他 Pair 绕过 |
-| 30分钟后 | 所有地址可交易和转账，不再限制金额和 Pair |
+| 激活后前30分钟 | 仅100个交易白名单地址可通过官方 Pair 买卖；单笔严格小于200 USDT；禁止普通转账 |
+| 30分钟后 | 所有地址均可通过官方 Pair 买卖，不再限制金额；普通转账恢复 |
 
 `activateTrading` 只能由部署账户成功调用一次，官方 Pair 设置后不能修改，30分钟限制不能重启或延长。
 
-通过官方 Pair 买卖前，交易者还必须先在 USDT 合约中授权 YION 合约扣取手续费。该授权独立于给 PancakeSwap Router 的 USDT 授权；授权余额不足时，整笔买入或卖出会回滚。手续费按买入所需或卖出可得的 USDT 报价值计算，并额外从交易者钱包转入固定收款地址。
+交易者可以直接使用 PancakeSwap V2 页面或 Router 买卖。买入时输入的 USDT 全部进入 AMM，Pair 输出的 YION 由 Token 合约拆成97%给用户、3%给手续费地址；卖出时用户提交的 YION 拆成97%进入 Pair、3%给手续费地址。前端必须使用支持 Fee-on-Transfer Token 的买卖接口，尤其卖出应调用 `swapExactTokensForTokensSupportingFeeOnTransferTokens`。
+
+手续费直接以 YION 支付给固定手续费地址，不经过 Token 合约累计，也不执行自动换币，因此每笔交易只有一次简单的手续费拆分。
+
+`setFeeExempt(account, true/false)` 管理独立的免手续费白名单，不影响前30分钟交易资格。部署账户和 YION Token 合约地址自身默认在该白名单中；官方 Pair 不应加入免手续费白名单。
 
 ## 9. 分步部署
 
@@ -390,6 +397,32 @@ npm run deployments
 历史记录采用追加模式，重新部署不会覆盖旧地址。判断“当前使用哪个版本”时优先读取 `PROJECT_MEMORY.md`，完整交易事实以 JSON 登记为准。
 
 ## 13. 部署后验证
+
+### 13.0 一键生成 Java 合约包装类
+
+Solidity 合约变更并通过测试后，在本工程执行：
+
+```bash
+npm run generate:java
+```
+
+该命令会先重新编译 Solidity，再从 Truffle artifact 提取 ABI 和 bytecode，使用与后端一致的 Web3j 5.0.0 生成 `YION`、`GameRewardPool`、`Bullfigthing`、`GoldenFlower` 和 `Landlords` Java 包装类，并更新相邻的 `moon-son-svc/src/main/java/tcbv/zhaohui/moon/contract` 目录。机器无需预装 Web3j CLI，首次执行时 Maven 会下载固定版本的生成器依赖。
+
+如果后端不在默认的相邻目录，可指定路径：
+
+```bash
+MOON_SON_SVC_DIR=/path/to/moon-son-svc npm run generate:java
+```
+
+PowerShell：
+
+```powershell
+$env:MOON_SON_SVC_DIR = "D:\path\to\moon-son-svc"
+npm run generate:java
+Remove-Item Env:MOON_SON_SVC_DIR
+```
+
+生成完成后应在后端执行 `mvnw.cmd -DskipTests compile`，确认业务代码仍与最新 ABI 兼容。Java 类只是链上合约的 Web3j 调用包装，不替代 Solidity 合约本身。
 
 ### 13.1 验证三个游戏配置
 

@@ -200,6 +200,85 @@
       },
       "gasUsed": 889009,
       "status": "success"
+    },
+    {
+      "contract": "YION",
+      "address": "0x0F5b48558856699Abcd92901945c2264D9DEe699",
+      "transactionHash": "0x0eb71d43bd5c03d99c303111f87e8559e506c72da80d78edadd761f8004fe0fc",
+      "blockNumber": 125319434,
+      "blockTimestamp": 1786840120,
+      "deployedAtUtc": "2026-08-16T00:28:40.000Z",
+      "deployedAtAsiaShanghai": "2026-08-16 08:28:40 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "usdt": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+        "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+      },
+      "gasUsed": 3442364,
+      "status": "success"
+    },
+    {
+      "contract": "GameRewardPool",
+      "address": "0x5652Dd23CB16cA5503Bac13fe28c49EFEaC0E39d",
+      "transactionHash": "0x0ecf1b2c73c62eceeab4f392963b43dece10afe59c60d1ab0fae3843955a0626",
+      "blockNumber": 125319493,
+      "blockTimestamp": 1786840146,
+      "deployedAtUtc": "2026-08-16T00:29:06.000Z",
+      "deployedAtAsiaShanghai": "2026-08-16 08:29:06 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "token": "0x0F5b48558856699Abcd92901945c2264D9DEe699"
+      },
+      "gasUsed": 889009,
+      "status": "success"
+    },
+    {
+      "contract": "YION",
+      "address": "0x686444A9F00765DED3C144Aa5026b2ccCd9Dc4df",
+      "transactionHash": "0x7b5bd14a2f379e60274b2d8df4d6279f39697f1a447995b56daaac96a6cbac62",
+      "blockNumber": 125432367,
+      "blockTimestamp": 1786890941,
+      "deployedAtUtc": "2026-08-16T14:35:41.000Z",
+      "deployedAtAsiaShanghai": "2026-08-16 22:35:41 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "usdt": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+        "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+      },
+      "gasUsed": 3644860,
+      "status": "success"
+    },
+    {
+      "contract": "YION",
+      "address": "0xc89B6523E2890DFF72959fB927983668fD676438",
+      "transactionHash": "0xfe7ff82f08ef98276ea73a69da99bff0e4f51c280556b146b0994de879f06639",
+      "blockNumber": 125436470,
+      "blockTimestamp": 1786892787,
+      "deployedAtUtc": "2026-08-16T15:06:27.000Z",
+      "deployedAtAsiaShanghai": "2026-08-16 23:06:27 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "usdt": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+        "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+      },
+      "gasUsed": 4209716,
+      "status": "success"
+    },
+    {
+      "contract": "YION",
+      "address": "0x85C6911759989f1355E63AeA55e71C0336Cbdab3",
+      "transactionHash": "0xc58481e060fa6ade0d4edba29b10da17f77a8cf14d6c0699f47acdf01cd047c1",
+      "blockNumber": 125799641,
+      "blockTimestamp": 1787056239,
+      "deployedAtUtc": "2026-08-18T12:30:39.000Z",
+      "deployedAtAsiaShanghai": "2026-08-18 20:30:39 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "usdt": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+        "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+      },
+      "gasUsed": 3676614,
+      "status": "success"
     }
   ],
   "liquidityPools": [
@@ -260,6 +339,88 @@
       "lpTokens": "9999999999999999000",
       "initialPrice": "1 USDT = 10000 YION",
       "gasUsed": 2191185,
+      "status": "success"
+    },
+    {
+      "pairName": "YION/USDT",
+      "pair": "0xC6F1A7D0cEdAEee17654180c9A3e5fadbC72E3a0",
+      "token": "0x0F5b48558856699Abcd92901945c2264D9DEe699",
+      "quoteToken": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+      "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+      "provider": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "transactionHash": "0x45c3cd8c4e509f431f98c07ae59c0e941bb7707ef80dd9946c43c58924ab975d",
+      "blockNumber": 125319472,
+      "blockTimestamp": 1786840137,
+      "createdAtUtc": "2026-08-16T00:28:57.000Z",
+      "createdAtAsiaShanghai": "2026-08-16 08:28:57 +08:00",
+      "tokenAmount": "10000000000000000",
+      "quoteTokenAmount": "10000000000000000000000",
+      "lpTokens": "9999999999999999000",
+      "initialPrice": "1 USDT = 10000 YION",
+      "gasUsed": 2191125,
+      "status": "success"
+    },
+    {
+      "pairName": "YION/USDT",
+      "pair": "0x9F69ba6856B9e383e6752E01528632cC41046A1d",
+      "token": "0x686444A9F00765DED3C144Aa5026b2ccCd9Dc4df",
+      "quoteToken": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+      "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+      "provider": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "transactionHash": "0x4ee1c4e54e4db9a316165f2c56d59e3fc8b9b14f4e04367b8d8e68ad8e2308dc",
+      "blockNumber": 125432405,
+      "blockTimestamp": 1786890958,
+      "createdAtUtc": "2026-08-16T14:35:58.000Z",
+      "createdAtAsiaShanghai": "2026-08-16 22:35:58 +08:00",
+      "tokenAmount": "10000000000000000",
+      "quoteTokenAmount": "10000000000000000000000",
+      "lpTokens": "9999999999999999000",
+      "initialPrice": "1 USDT = 10000 YION",
+      "activationTransactionHash": "0xcb347609c686ff98e718132827920894ae911870854e574430f94b9408644362",
+      "restrictedUntil": "1786892766",
+      "gasUsed": 2191299,
+      "status": "success"
+    },
+    {
+      "pairName": "YION/USDT",
+      "pair": "0x59D43B3cd72FBa0e902759622647ff93e55eEF25",
+      "token": "0xc89B6523E2890DFF72959fB927983668fD676438",
+      "quoteToken": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+      "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+      "provider": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "transactionHash": "0xb5270b4f71e4495e25707c4526c97f94becb7b487fb0106c7318311c7ae96979",
+      "blockNumber": 125436508,
+      "blockTimestamp": 1786892804,
+      "createdAtUtc": "2026-08-16T15:06:44.000Z",
+      "createdAtAsiaShanghai": "2026-08-16 23:06:44 +08:00",
+      "tokenAmount": "10000000000000000",
+      "quoteTokenAmount": "10000000000000000000000",
+      "lpTokens": "9999999999999999000",
+      "initialPrice": "1 USDT = 10000 YION",
+      "activationTransactionHash": "0x414ab11d05ed49806632043fbe728b1163efdc3415da96268839a85711d46a5d",
+      "restrictedUntil": "1786894610",
+      "gasUsed": 2191388,
+      "status": "success"
+    },
+    {
+      "pairName": "YION/USDT",
+      "pair": "0x724a4EE29c83d57FF334f17a2D89c7f73AbadE7B",
+      "token": "0x85C6911759989f1355E63AeA55e71C0336Cbdab3",
+      "quoteToken": "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5",
+      "router": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+      "provider": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "transactionHash": "0x1a997f0e17029c81648fda18341f158d853edd0fe823c869c87a24369246cfe5",
+      "blockNumber": 125799681,
+      "blockTimestamp": 1787056257,
+      "createdAtUtc": "2026-08-18T12:30:57.000Z",
+      "createdAtAsiaShanghai": "2026-08-18 20:30:57 +08:00",
+      "tokenAmount": "10000000000000000",
+      "quoteTokenAmount": "10000000000000000000000",
+      "lpTokens": "9999999999999999000",
+      "initialPrice": "1 USDT = 10000 YION",
+      "activationTransactionHash": "0x517adde402f0bbdbe06f4dab25b8b247499274e9ea4cc4b1c5e1bcbc290ee51a",
+      "restrictedUntil": "1787058064",
+      "gasUsed": 2191386,
       "status": "success"
     }
   ]

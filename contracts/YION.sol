@@ -2,64 +2,99 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IYionPair {
+    /**
+     * @dev 获取代币0的地址
+     * @return 返回池中第一种代币的地址
+     */
     function token0() external view returns (address);
+    /**
+     * @dev 获取代币1的地址
+     * @return 返回池中第二种代币的地址
+     */
     function token1() external view returns (address);
 }
 
-interface IYionRouterQuote {
+interface IYionTokenMetadata {
+    function decimals() external view returns (uint8);
+}
+
+interface IYionRouter {
+    /**
+     * @dev 获取交易路径的代币数量
+     * @param amountOut 输出代币数量
+     */
     function getAmountsIn(uint256 amountOut, address[] calldata path)
         external view returns (uint256[] memory amounts);
+    /**
+     * @dev 获取交易路径的代币数量
+     * @param amountIn 输入代币数量
+     */
     function getAmountsOut(uint256 amountIn, address[] calldata path)
         external view returns (uint256[] memory amounts);
 }
 
 /**
  * @title YION
- * @notice Fixed-supply YION with a one-time 30-minute launch restriction.
+ * @notice Fixed-supply YION with launch restrictions and a 3% pair trade fee.
  */
 contract YION is ERC20 {
-    using SafeERC20 for IERC20;
+    error OnlyLauncher(); // 仅限启动器
+    error InvalidAddress(); // 无效地址
+    error InvalidPair(); // 无效交易对
+    error TradingAlreadyActivated(); // 交易已激活
+    error TradingNotActivated(); // 交易未激活
+    error RestrictedTransfer(); // 受限转账
+    error NotWhitelisted(); // 未列入白名单
+    error TradeLimitExceeded(); // 交易限制超出
+    error DuplicateWhitelistAddress(); // 重复白名单地址
+    error InvalidDecimals(); // 不支持的USDT精度
 
-    error OnlyLauncher();
-    error InvalidAddress();
-    error InvalidPair();
-    error TradingAlreadyActivated();
-    error TradingNotActivated();
-    error RestrictedTransfer();
-    error NotWhitelisted();
-    error TradeLimitExceeded();
-    error DuplicateWhitelistAddress();
+    uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** 8; // 1亿枚
+    uint256 public constant RESTRICTED_PERIOD = 30 minutes; // 交易限制时间
+    uint256 public immutable MAX_TRADE_USDT; // 单次交易最大USDT原始单位，按USDT精度计算
+    uint256 public constant WHITELIST_SIZE = 100; // 白名单大小
+    uint256 public constant TRADE_FEE_BPS = 300; // 交易费百分比
+    uint256 private constant BPS_DENOMINATOR = 10_000; // 百分比分母
+    address public constant FEE_RECIPIENT = 0xa24bDb249e80574A96D8B02b148E81B9be684675; // 交易费接收地址
 
-    uint256 public constant MAX_SUPPLY = 100_000_000 * 10 ** 8;
-    uint256 public constant RESTRICTED_PERIOD = 30 minutes;
-    uint256 public constant MAX_TRADE_USDT = 200 ether;
-    uint256 public constant WHITELIST_SIZE = 100;
-    uint256 public constant TRADE_FEE_BPS = 300;
-    uint256 private constant BPS_DENOMINATOR = 10_000;
-    address public constant FEE_RECIPIENT = 0xa24bDb249e80574A96D8B02b148E81B9be684675;
+    address public immutable launcher; // 启动器地址
+    address public immutable usdt; // USDT地址
+    IYionRouter public immutable router; // YION Router地址
+    address public liquidityPair; // 流动性交易对地址
+    uint256 public restrictedUntil; // 交易限制时间
 
-    address public immutable launcher;
-    address public immutable usdt;
-    IYionRouterQuote public immutable router;
-    address public liquidityPair;
-    uint256 public restrictedUntil;
+    mapping(address => bool) public whitelist; // 白名单地址
+    mapping(address => bool) public feeExempt; // 交易费豁免地址
 
-    mapping(address => bool) public whitelist;
+    event TradingActivated(address indexed pair, uint256 restrictedUntil); // 交易激活
+    event FeeExemptUpdated(address indexed account, bool exempt); // 交易费豁免更新
 
-    event TradingActivated(address indexed pair, uint256 restrictedUntil);
-    event TradeFeePaid(address indexed trader, address indexed recipient, uint256 usdtAmount);
+    // 交易限制
+    event TradeFeeCollected(
+        address indexed trader, // 交易者地址
+        bool indexed isBuy, // 是否买入
+        uint256 feeYion // 收取的YION交易费
+    );
 
+    /**
+     * @dev 构造函数
+     * @param usdtAddress USDT地址
+     * @param routerAddress YION Router地址
+     */
     constructor(address usdtAddress, address routerAddress) ERC20("YION", "YION") {
         if (usdtAddress == address(0) || routerAddress == address(0)) revert InvalidAddress();
+        uint8 usdtDecimals = IYionTokenMetadata(usdtAddress).decimals();
+        if (usdtDecimals > 74) revert InvalidDecimals();
+        MAX_TRADE_USDT = 200 * 10 ** uint256(usdtDecimals);
         launcher = msg.sender;
         usdt = usdtAddress;
-        router = IYionRouterQuote(routerAddress);
+        router = IYionRouter(routerAddress);
+        feeExempt[msg.sender] = true;
+        feeExempt[address(this)] = true;
 
-        address[100] memory accounts = [
+        address[WHITELIST_SIZE] memory accounts = [
             address(0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2),
             address(0x291A2516ab886E947A03De9e48E7C886C6ec3D5C),
             address(0x3972a203957936E8aBa8dbf327096d3B669c908D),
@@ -171,68 +206,125 @@ contract YION is ERC20 {
         _mint(msg.sender, MAX_SUPPLY);
     }
 
+    /**
+     * @dev 获取代币的小数位数
+     * @return 返回代币的小数位数，本合约中设置为8位
+     */
     function decimals() public pure override returns (uint8) {
-        return 8;
+        return 8;  // 返回固定的小数位数8
     }
 
+    /**
+     * 激活交易功能的函数
+     * 仅允许启动者(launcher)调用此函数
+     * 设置流动性对并设置交易限制期
+     * @param pair 交易对地址，必须是与USDT和当前代币有效的交易对
+     */
     function activateTrading(address pair) external {
+        // 检查调用者是否为启动者，否则抛出OnlyLauncher错误
         if (msg.sender != launcher) revert OnlyLauncher();
+        // 检查交易是否已经激活，否则抛出TradingAlreadyActivated错误
         if (liquidityPair != address(0)) revert TradingAlreadyActivated();
+        // 验证交易对地址是否有效，不能为零地址且必须包含合约代码
         if (pair == address(0) || pair.code.length == 0) revert InvalidPair();
+        // 获取交易对中的两个代币地址
         address token0 = IYionPair(pair).token0();
         address token1 = IYionPair(pair).token1();
+        // 验证交易对是否为当前代币与USDT的组合
         if (!(
             (token0 == address(this) && token1 == usdt)
                 || (token1 == address(this) && token0 == usdt)
         )) revert InvalidPair();
 
+        // 设置流动性对地址和交易限制期
         liquidityPair = pair;
         restrictedUntil = block.timestamp + RESTRICTED_PERIOD;
+        // 触发交易激活事件，包含交易对地址和限制期结束时间
         emit TradingActivated(pair, restrictedUntil);
     }
 
+    /**
+     * 检查交易限制是否激活
+     * @return 返回交易限制是否激活，如果交易对地址不为零且限制期未结束，则返回true，否则返回false
+     */
     function restrictionActive() public view returns (bool) {
         return liquidityPair != address(0) && block.timestamp < restrictedUntil;
     }
 
+    /**
+     * 设置交易费豁免
+     * 仅允许启动者(launcher)调用此函数
+     * 设置或取消账户的交易费豁免状态
+     * @param account 要设置的交易费豁免状态的账户地址
+     * @param exempt 是否豁免交易费，true表示豁免，false表示不豁免
+     */
+    function setFeeExempt(address account, bool exempt) external {
+        if (msg.sender != launcher) revert OnlyLauncher();
+        if (account == address(0)) revert InvalidAddress();
+        feeExempt[account] = exempt;
+        emit FeeExemptUpdated(account, exempt);
+    }
+
+    /**
+     * 更新账户余额
+     * 重写父合约的_update函数，添加交易限制和交易费逻辑
+     * @param from 转出账户地址
+     * @param to 转入账户地址
+     * @param value 转账金额
+     */
     function _update(address from, address to, uint256 value) internal override {
-        if (from != address(0) && to != address(0)) {
-            if (liquidityPair == address(0)) {
-                if (from != launcher && to != launcher) revert TradingNotActivated();
-            } else {
-                bool isBuy = from == liquidityPair;
-                bool isSell = to == liquidityPair;
-                if (block.timestamp < restrictedUntil) {
-                    if (!isBuy && !isSell) revert RestrictedTransfer();
+        if (from == address(0) || to == address(0)) {
+            super._update(from, to, value);
+            return;
+        }
 
-                    address trader = isBuy ? to : from;
-                    if (!_isWhitelisted(trader)) revert NotWhitelisted();
-                }
+        if (liquidityPair == address(0)) {
+            if (from != launcher && to != launcher) revert TradingNotActivated();
+            super._update(from, to, value);
+            return;
+        }
 
-                if (isBuy || isSell) {
-                    address trader = isBuy ? to : from;
-                    uint256 usdtValue = _tradeUsdtValue(isBuy, value);
-                    if (block.timestamp < restrictedUntil && usdtValue >= MAX_TRADE_USDT) {
-                        revert TradeLimitExceeded();
-                    }
-                    _collectTradeFee(trader, usdtValue);
+        bool isBuy = from == liquidityPair;
+        bool isSell = to == liquidityPair;
+        address trader = isBuy ? to : from;
+        if (block.timestamp < restrictedUntil) {
+            if (!isBuy && !isSell) revert RestrictedTransfer();
+            if (trader != launcher) {
+                if (!_isWhitelisted(trader)) revert NotWhitelisted();
+                if (_tradeUsdtValue(isBuy, value) > MAX_TRADE_USDT) {
+                    revert TradeLimitExceeded();
                 }
             }
         }
+
+        bool takeFee = (isBuy || isSell) && !feeExempt[trader];
+        if (takeFee) {
+            uint256 feeYion = value * TRADE_FEE_BPS / BPS_DENOMINATOR;
+            if (feeYion != 0) {
+                super._update(from, FEE_RECIPIENT, feeYion);
+                value -= feeYion;
+                emit TradeFeeCollected(trader, isBuy, feeYion);
+            }
+        }
+
         super._update(from, to, value);
     }
 
-    function _collectTradeFee(address trader, uint256 usdtValue) internal {
-        uint256 fee = usdtValue * TRADE_FEE_BPS / BPS_DENOMINATOR;
-        if (fee == 0) return;
-        IERC20(usdt).safeTransferFrom(trader, FEE_RECIPIENT, fee);
-        emit TradeFeePaid(trader, FEE_RECIPIENT, fee);
-    }
-
+    /**
+     * 检查账户是否在白名单中
+     * @param account 要检查的账户地址
+     * @return 返回账户是否在白名单中
+     */
     function _isWhitelisted(address account) internal view virtual returns (bool) {
         return whitelist[account];
     }
 
+    /**
+     * 计算交易时的USDT价值
+     * @param isBuy 是否为买入操作
+     * @param tokenAmount 代币数量
+     * @return 返回交易时的USDT价值
+     */
     function _tradeUsdtValue(bool isBuy, uint256 tokenAmount) internal view returns (uint256) {
         address[] memory path = new address[](2);
         uint256[] memory amounts;
@@ -248,4 +340,5 @@ contract YION is ERC20 {
         amounts = router.getAmountsOut(tokenAmount, path);
         return amounts[1];
     }
+
 }

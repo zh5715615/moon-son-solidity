@@ -26,18 +26,27 @@
 
 ## YION 测试网发行与流动性
 
-- 最新 YION（8 位白名单版）：`0x94e458dAf76704045C790B8211f1EF565f6835bb`
+- 最新链上 YION（8 位、白名单、PancakeSwap 原生 Fee-on-Transfer 版）：`0x85C6911759989f1355E63AeA55e71C0336Cbdab3`
 - 名称/符号：`YION` / `YION`
 - decimals：8
 - 固定总量：100,000,000 YION；构造时一次性铸造，无增发入口。
-- PancakeSwap V2 YION/USDT Pair：`0xeceC6FE6E1175585311634746300C04C479fA739`
+- PancakeSwap V2 YION/USDT Pair：`0x724a4EE29c83d57FF334f17a2D89c7f73AbadE7B`
 - 测试网 USDT：`0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5`
 - 初始储备：100,000,000 YION + 10,000 USDT。
 - 初始比例：`1 USDT = 10,000 YION`。
 - 全部 YION 已进入流动性池，LP Token 由部署账户持有。
 - Pair 激活后前 30 分钟仅允许代码内写死的 100 个白名单地址交易；单笔按
-  PancakeSwap 实时报价严格小于 200 USDT，并禁止普通转账/其他 Pair 绕过。
+  PancakeSwap 实时报价最大允许 200 USDT，并禁止普通转账/其他 Pair 绕过。
+- 200 USDT 上限在构造时读取报价 Token 的 `decimals()` 后换算为原始单位，不假定
+  USDT 固定为 6 位或 18 位；边界使用 `>`，因此正好 200 USDT 可以交易。
 - 30 分钟结束后限制自动永久失效，所有地址和金额开放。
+- 最新链上版本可以直接通过 PancakeSwap V2 的 Fee-on-Transfer 兼容入口交易：官方 Pair
+  买入和卖出均扣3% YION，手续费 YION 直接发送到
+  `0xa24bDb249e80574A96D8B02b148E81B9be684675`，不累计、不换 USDT。源码另有独立
+  `feeExempt` 白名单，部署账户和 Token 合约自身默认免手续费，由部署账户管理。
+- 本次于 2026-08-18 20:31:04 +08:00 激活，首轮白名单限制截至
+  2026-08-18 21:01:04 +08:00（Unix `1787058064`）。
+- 上一版额外扣费 YION 为 `0x6864...Dc4df`，Pair 为 `0x9F69...46A1d`。
 - 上一版 18 位 YION `0x9e6C...cE3a` 及 Pair `0x92F4...073F` 仍保留在链上，
   但不再是最新版本。
 - 当前三个游戏合约仍使用原业务 Token `0x7ef3...a7C7`，未切换到 YION。

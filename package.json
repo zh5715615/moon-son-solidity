@@ -5,6 +5,7 @@
   "description": "弈元游戏合约 Truffle 工程",
   "scripts": {
     "compile": "truffle compile --all",
+    "generate:java": "npm run compile && node scripts/generate-java-wrappers.js",
     "test": "truffle test --network test --migrate-none",
     "ganache": "ganache --server.host 127.0.0.1 --server.port 8545 --chain.networkId 5777",
     "migrate:local": "truffle migrate --reset --network development",
