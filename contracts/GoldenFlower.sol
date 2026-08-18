@@ -28,10 +28,8 @@ interface IGoldenFlowerToken {
  * 4. 如果房间未完成或需要取消，dealer 可调用 refundRoom 原路退还已加入玩家的托管金额。
  *
  * 房间档位：
- * roomId  1-5  : 3 人场 | 底注 1,000 | 入房托管 30,000
- * roomId  6-10 : 3 人场 | 底注 1,000 | 入房托管 120,000
- * roomId 11-15 : 5 人场 | 底注 1,000 | 入房托管 50,000
- * roomId 16-20 : 5 人场 | 底注 1,000 | 入房托管 200,000
+ * roomId  1-10 : 3 人场 | 入场费 200（2.00 USDT）
+ * roomId 11-20 : 5 人场 | 入场费 400（4.00 USDT）
  */
 contract GoldenFlower is PancakeV2UsdtQuote {
 
@@ -60,6 +58,8 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     error TokenTransferFailed();
 
     uint256 public constant TOTAL_ROOMS = 20;
+    uint256 public constant THREE_PLAYER_ENTRY_FEE_USDT_CENTS = 200;
+    uint256 public constant FIVE_PLAYER_ENTRY_FEE_USDT_CENTS = 400;
     // 最大房间容量；具体房间是 3 人场还是 5 人场，由 _configOf(roomId) 决定。
     uint256 public constant ROOM_PLAYERS = 5;
 
@@ -71,10 +71,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     enum RoomStatus { Waiting, Locked }
 
     struct RoomConfig {
-        // 链下积分单位，当前所有房型均为 1K。
+        // 链下积分单位，与当前房型入场费保持一致。
         uint256 betUnit;
 
-        // 玩家入房时一次性托管的上限金额：30K / 120K / 50K / 200K。
+        // 玩家入房时一次性托管的金额：3 人房 2.00 USDT，5 人房 4.00 USDT。
         uint256 maxDeposit;
 
         // 房间满员人数，仅允许 3 或 5。
@@ -164,15 +164,16 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      */
     function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
-        if (roomId <= 5) {
-            cfg = RoomConfig({ betUnit: 1_000, maxDeposit: 30_000, playerCapacity: 3 });
-        } else if (roomId <= 10) {
-            cfg = RoomConfig({ betUnit: 1_000, maxDeposit: 120_000, playerCapacity: 3 });
-        } else if (roomId <= 15) {
-            cfg = RoomConfig({ betUnit: 1_000, maxDeposit: 50_000, playerCapacity: 5 });
-        } else {
-            cfg = RoomConfig({ betUnit: 1_000, maxDeposit: 200_000, playerCapacity: 5 });
-        }
+        bool isThreePlayerRoom = roomId <= 10;
+        uint256 playerCapacity = isThreePlayerRoom ? 3 : 5;
+        uint256 entryFee = isThreePlayerRoom
+            ? THREE_PLAYER_ENTRY_FEE_USDT_CENTS
+            : FIVE_PLAYER_ENTRY_FEE_USDT_CENTS;
+        cfg = RoomConfig({
+            betUnit: entryFee,
+            maxDeposit: entryFee,
+            playerCapacity: playerCapacity
+        });
     }
 
     /**

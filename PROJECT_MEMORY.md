@@ -26,11 +26,11 @@
 
 ## YION 测试网发行与流动性
 
-- 最新链上 YION（8 位、白名单、PancakeSwap 原生 Fee-on-Transfer 版）：`0x85C6911759989f1355E63AeA55e71C0336Cbdab3`
+- 最新链上 YION（8 位、白名单、PancakeSwap 原生 Fee-on-Transfer 版）：`0xF72ed8DF5709ECAABdBfa013FE643778a62252b8`
 - 名称/符号：`YION` / `YION`
 - decimals：8
 - 固定总量：100,000,000 YION；构造时一次性铸造，无增发入口。
-- PancakeSwap V2 YION/USDT Pair：`0x724a4EE29c83d57FF334f17a2D89c7f73AbadE7B`
+- PancakeSwap V2 YION/USDT Pair：`0x47E647a4f229d29e6f7C2aD7C0b5b209f9f8D0dA`
 - 测试网 USDT：`0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5`
 - 初始储备：100,000,000 YION + 10,000 USDT。
 - 初始比例：`1 USDT = 10,000 YION`。
@@ -44,17 +44,23 @@
   买入和卖出均扣3% YION，手续费 YION 直接发送到
   `0xa24bDb249e80574A96D8B02b148E81B9be684675`，不累计、不换 USDT。源码另有独立
   `feeExempt` 白名单，部署账户和 Token 合约自身默认免手续费，由部署账户管理。
-- 本次于 2026-08-18 20:31:04 +08:00 激活，首轮白名单限制截至
-  2026-08-18 21:01:04 +08:00（Unix `1787058064`）。
+- 本次于 2026-08-18 21:23:49 +08:00 激活，首轮白名单限制截至
+  2026-08-18 21:53:49 +08:00（Unix `1787061229`）。
 - 上一版额外扣费 YION 为 `0x6864...Dc4df`，Pair 为 `0x9F69...46A1d`。
 - 上一版 18 位 YION `0x9e6C...cE3a` 及 Pair `0x92F4...073F` 仍保留在链上，
   但不再是最新版本。
-- 当前三个游戏合约仍使用原业务 Token `0x7ef3...a7C7`，未切换到 YION。
+- 最新 YION 生态合约：GameRewardPool `0xFCdbC72d5273DDeA2620784D4A34384A8a9eD80E`，
+  Bullfigthing `0xE5d7D133F50C0304AB1906C18C6CB56FaDf8194B`，GoldenFlower
+  `0x5e219f3A14AA30685Eb6f6A5f62499aE346167eB`，Landlords
+  `0x1bfE54E18344d31Cc01c90Bf251447ced7CAf41B`。奖励池和三个游戏均绑定本次新部署的 YION。
 
 ## 游戏合约计价规则
 
 - 三个游戏合约构造函数保持不变。
-- 房间配置数值改为 USDT 美分整数：`3000 = 30.00 USDT`。
+- 房间配置使用 USDT 美分整数。当前源码配置为：斗牛 15 个 5 人房，入场费
+  `500 = 5.00 USDT`；炸金花 20 个房，前 10 个 3 人房入场费 `200 = 2.00 USDT`，
+  后 10 个 5 人房入场费 `400 = 4.00 USDT`；斗地主 12 个 3 人房，入场费
+  `200 = 2.00 USDT`。
 - 玩家仍使用业务 Token 支付；入房时通过 PancakeSwap V2 `getAmountsIn`
   按当前 Token/USDT 直连池报价计算 Token 托管数量。
 - Chain ID 56 自动使用 BSC 主网 USDT/Router；Chain ID 97 自动使用测试网
@@ -72,7 +78,7 @@
 - 取消房间不重新报价，始终原样退回玩家入房时实际托管的 Token。
 - 前端应先调用 `quoteTokenAmount(usdtPriceCents)`，并仅授权本次需要的
   Token 数量（或很小容差），不要无限授权。V2 现货报价可能受到池价格操纵。
-- 当前源码已包含结算时重新报价逻辑，链上现有三个游戏地址均不是最终源码版本，
-  需要重新部署；GameRewardPool 无需重新部署。
+- 当前源码已包含结算时重新报价逻辑和上述新房间配置；2026-08-18 已部署的三个
+  游戏合约仍是修改前的房间配置，需要重新部署后新配置才会生效。
 
 最新地址及交易哈希请始终以部署登记表为准。

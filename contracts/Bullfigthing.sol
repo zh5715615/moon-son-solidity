@@ -94,18 +94,12 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     uint256 public constant FEW_PERSON_ROOM = 3;
     uint256 public constant MULTI_PERSON_ROOM = 5;
 
-    uint256 public constant ROOM_LEVEL_1 = 3000;
-    uint256 public constant ROOM_LEVEL_2 = 6000;
-    uint256 public constant ROOM_LEVEL_3 = 12000;
-    uint256 public constant ROOM_LEVEL_4 = 200000;
-    uint256 public constant ROOM_LEVEL_5 = 500000;
-    uint256 public constant ROOM_LEVEL_6 = 1000000;
-
     uint256 public constant TOTAL_ROOMS = 15;
+    uint256 public constant ENTRY_FEE_USDT_CENTS = 500;
 
     struct RoomInfo {
         uint256 userCapacity;       // 房间人数上限，3人房或5人房
-        uint256 roomAmount;         // 单个玩家入房 USDT 价格（美分，3000 = 30.00 USDT）
+        uint256 roomAmount;         // 单个玩家入房 USDT 价格（美分，500 = 5.00 USDT）
         uint256 currentUserNumber;  // 当前已加入人数
         bool enable;                // true=可加入，false=已满员等待结算
     }
@@ -155,15 +149,9 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         dpegTokenAddress = _dpegAddress;
         dpegTokenDecimals = 10 ** dpegToken.decimals();
 
-        // 0-4: 5 人 3K 房；5-9: 5 人 6K 房；10-14: 5 人 12K 房。
-        for (uint256 level = 0; level < 5; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_1);
-        }
-        for (uint256 level = 5; level < 10; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_2);
-        }
-        for (uint256 level = 10; level < TOTAL_ROOMS; level++) {
-            _initRoom(level, MULTI_PERSON_ROOM, ROOM_LEVEL_3);
+        // 0-14：15 个 5 人房，每位玩家入场费统一为 5 USDT。
+        for (uint256 level = 0; level < TOTAL_ROOMS; level++) {
+            _initRoom(level, MULTI_PERSON_ROOM, ENTRY_FEE_USDT_CENTS);
         }
     }
 

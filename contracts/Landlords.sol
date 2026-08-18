@@ -22,9 +22,7 @@ interface ILandlordsToken {
  * @notice 斗地主链上资金托管与结算合约。叫抢地主、发牌和出牌均在后端链下完成。
  *
  * 房间配置：
- * roomId  1-9  : 3人场，底注1K，单人托管上限20K。
- * roomId 10-18 : 3人场，底注3K，单人托管上限60K。
- * roomId 19-27 : 3人场，底注5K，单人托管上限100K。
+ * roomId 1-12：3 人场，入场费统一为 200（2.00 USDT）。
  */
 contract Landlords is PancakeV2UsdtQuote {
     error OnlyDealer();
@@ -48,8 +46,9 @@ contract Landlords is PancakeV2UsdtQuote {
     error TokenTransferFailed();
     error InsufficientContractTokenBalance();
 
-    uint256 public constant TOTAL_ROOMS = 27;
+    uint256 public constant TOTAL_ROOMS = 12;
     uint256 public constant ROOM_PLAYERS = 3;
+    uint256 public constant ENTRY_FEE_USDT_CENTS = 200;
 
     ILandlordsToken public immutable token;
     address public immutable dealer;
@@ -257,13 +256,8 @@ contract Landlords is PancakeV2UsdtQuote {
     }
 
     function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
-        if (roomId <= 9) {
-            return RoomConfig(1_000, 20_000);
-        }
-        if (roomId <= 18) {
-            return RoomConfig(3_000, 60_000);
-        }
-        return RoomConfig(5_000, 100_000);
+        if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
+        return RoomConfig(ENTRY_FEE_USDT_CENTS, ENTRY_FEE_USDT_CENTS);
     }
 
     function _validateArrays(address[] calldata addrs, uint256[] calldata values) internal pure {

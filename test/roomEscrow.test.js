@@ -26,14 +26,19 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
 
   it("locks and refunds a Landlords room", async () => {
     const game = await Landlords.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(200);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     let room = await game.getRoomInfo(1);
     assert.equal(room.values[0].toString(), "1", "room should be locked");
     assert.equal(room.values[3].toString(), "3");
-    assert.equal(room.values[4].toString(), "1000", "bet price is 10.00 USDT");
-    assert.equal(room.values[5].toString(), "20000", "deposit price is 200.00 USDT");
+    assert.equal(room.values[4].toString(), "200", "bet price is 2.00 USDT");
+    assert.equal(room.values[5].toString(), "200", "entry price is 2.00 USDT");
+    assert.equal((await game.TOTAL_ROOMS()).toString(), "12");
+    const lastRoom = await game.getRoomInfo(12);
+    assert.equal(lastRoom.values[4].toString(), "200");
+    assert.equal(lastRoom.values[5].toString(), "200");
+    await expectRevert(game.getRoomInfo(13));
     assert.equal(await game.usdtToken(), "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5");
     await expectRevert(game.refundRoom(1, { from: outsider }));
 
@@ -46,7 +51,7 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
 
   it("falls back to token ratios when Landlords USDT quote exceeds escrow", async () => {
     const game = await Landlords.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(200);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     await game.setQuoteBps(11_000, { from: owner });
@@ -54,25 +59,25 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
     const settlement = await game.settleRoom(
       1,
       [outsider, player1],
-      [10_000, 10_000, 10_000, 1, 0, 0, 21_000],
+      [100, 100, 100, 1, 0, 0, 210],
       { from: dealer }
     );
 
     const afterWinner = await token.balanceOf(player1);
-    assert.equal(afterWinner.sub(beforeWinner).toString(), tokens(310));
-    assert.equal((await pool.rankPoolBalance()).toString(), tokens(15));
-    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(30));
+    assert.equal(afterWinner.sub(beforeWinner).toString(), tokens(3.1));
+    assert.equal((await pool.rankPoolBalance()).toString(), tokens(0.15));
+    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(0.3));
     assert.equal((await token.balanceOf(game.address)).toString(), "0");
     const event = settlement.logs.find((log) => log.event === "SettlementModeSelected").args;
     assert.equal(event.usdtMode, false);
-    assert.equal(event.escrowToken.toString(), tokens(600));
-    assert.equal(event.quotedTokenRequired.toString(), tokens(660));
-    assert.equal(event.paidToken.toString(), tokens(600));
+    assert.equal(event.escrowToken.toString(), tokens(6));
+    assert.equal(event.quotedTokenRequired.toString(), tokens(6.6));
+    assert.equal(event.paidToken.toString(), tokens(6));
   });
 
   it("settles Landlords at the current USDT value when the token price rises", async () => {
     const game = await Landlords.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(200);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     await game.setQuoteBps(8_000, { from: owner });
@@ -80,29 +85,37 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
     const settlement = await game.settleRoom(
       1,
       [outsider, player1],
-      [10_000, 10_000, 10_000, 1, 0, 0, 21_000],
+      [100, 100, 100, 1, 0, 0, 210],
       { from: dealer }
     );
 
     const event = settlement.logs.find((log) => log.event === "SettlementModeSelected").args;
     assert.equal(event.usdtMode, true);
-    assert.equal(event.escrowToken.toString(), tokens(600));
-    assert.equal(event.quotedTokenRequired.toString(), tokens(480));
-    assert.equal(event.paidToken.toString(), tokens(480));
-    assert.equal((await token.balanceOf(player1)).sub(beforeWinner).toString(), tokens(248));
-    assert.equal((await pool.rankPoolBalance()).toString(), tokens(12));
-    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(24));
-    assert.equal((await token.balanceOf(game.address)).toString(), tokens(120));
+    assert.equal(event.escrowToken.toString(), tokens(6));
+    assert.equal(event.quotedTokenRequired.toString(), tokens(4.8));
+    assert.equal(event.paidToken.toString(), tokens(4.8));
+    assert.equal((await token.balanceOf(player1)).sub(beforeWinner).toString(), tokens(2.48));
+    assert.equal((await pool.rankPoolBalance()).toString(), tokens(0.12));
+    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(0.24));
+    assert.equal((await token.balanceOf(game.address)).toString(), tokens(1.2));
   });
 
   it("locks and refunds a three-player GoldenFlower room", async () => {
     const game = await GoldenFlower.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(300);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     let room = await game.getRoomInfo(1);
     assert.equal(room.values[0].toString(), "1");
     assert.equal(room.values[6].toString(), "3");
+    assert.equal(room.values[4].toString(), "200");
+    assert.equal(room.values[5].toString(), "200");
+    assert.equal((await game.TOTAL_ROOMS()).toString(), "20");
+    const lastRoom = await game.getRoomInfo(20);
+    assert.equal(lastRoom.values[4].toString(), "400");
+    assert.equal(lastRoom.values[5].toString(), "400");
+    assert.equal(lastRoom.values[6].toString(), "5");
+    await expectRevert(game.getRoomInfo(21));
 
     await game.refundRoom(1, { from: dealer });
     room = await game.getRoomInfo(1);
@@ -112,30 +125,30 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
 
   it("settles GoldenFlower in USDT mode when the settlement quote fits escrow", async () => {
     const game = await GoldenFlower.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(300);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     await game.setQuoteBps(9_000, { from: owner });
     const settlement = await game.settleRoom(
       1,
       [player1, outsider, owner, dealer],
-      [10_000, 10_000, 10_000, 0, 0, 1, 1, 900, 600],
+      [100, 100, 100, 0, 0, 1, 1, 9, 6],
       { from: dealer }
     );
 
-    assert.equal((await pool.rankPoolBalance()).toString(), tokens(13.5));
-    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(27));
-    assert.equal((await token.balanceOf(game.address)).toString(), tokens(90));
+    assert.equal((await pool.rankPoolBalance()).toString(), tokens(0.135));
+    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(0.27));
+    assert.equal((await token.balanceOf(game.address)).toString(), tokens(0.6));
     const event = settlement.logs.find((log) => log.event === "SettlementModeSelected").args;
     assert.equal(event.usdtMode, true);
-    assert.equal(event.escrowToken.toString(), tokens(900));
-    assert.equal(event.quotedTokenRequired.toString(), tokens(810));
-    assert.equal(event.paidToken.toString(), tokens(810));
+    assert.equal(event.escrowToken.toString(), tokens(6));
+    assert.equal(event.quotedTokenRequired.toString(), tokens(5.4));
+    assert.equal(event.paidToken.toString(), tokens(5.4));
   });
 
   it("falls back to the room escrow when the GoldenFlower token price falls", async () => {
     const game = await GoldenFlower.new(token.address, dealer, pool.address, { from: owner });
-    const deposit = tokens(300);
+    const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
     await game.setQuoteBps(11_000, { from: owner });
@@ -143,18 +156,18 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
     const settlement = await game.settleRoom(
       1,
       [player1, outsider, owner, dealer],
-      [10_000, 10_000, 10_000, 0, 0, 1, 1, 900, 600],
+      [100, 100, 100, 0, 0, 1, 1, 9, 6],
       { from: dealer }
     );
 
     const event = settlement.logs.find((log) => log.event === "SettlementModeSelected").args;
     assert.equal(event.usdtMode, false);
-    assert.equal(event.escrowToken.toString(), tokens(900));
-    assert.equal(event.quotedTokenRequired.toString(), tokens(990));
-    assert.equal(event.paidToken.toString(), tokens(900));
-    assert.equal((await token.balanceOf(player1)).sub(beforeWinner).toString(), tokens(410));
-    assert.equal((await pool.rankPoolBalance()).toString(), tokens(15));
-    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(30));
+    assert.equal(event.escrowToken.toString(), tokens(6));
+    assert.equal(event.quotedTokenRequired.toString(), tokens(6.6));
+    assert.equal(event.paidToken.toString(), tokens(6));
+    assert.equal((await token.balanceOf(player1)).sub(beforeWinner).toString(), tokens(3.1));
+    assert.equal((await pool.rankPoolBalance()).toString(), tokens(0.15));
+    assert.equal((await pool.replenishPoolBalance()).toString(), tokens(0.3));
     assert.equal((await token.balanceOf(game.address)).toString(), "0");
   });
 });
