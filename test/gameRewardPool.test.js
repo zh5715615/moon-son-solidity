@@ -8,6 +8,7 @@ contract("GameRewardPool", ([owner, depositor, alice, outsider]) => {
   it("deposits, records and lets a user withdraw rank rewards", async () => {
     const token = await MockToken.new({ from: owner });
     const pool = await GameRewardPool.new(token.address, { from: owner });
+    assert.equal(await pool.yion(), token.address);
     await token.mint(depositor, tokens(1_000), { from: owner });
     await token.approve(pool.address, tokens(500), { from: depositor });
     await pool.depositRankReward(tokens(500), { from: depositor });

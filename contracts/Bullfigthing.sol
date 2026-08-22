@@ -16,17 +16,17 @@ interface IBullTokenMetadata is IBullToken {
 }
 
 library SafeBullERC20 {
-    function safeTransfer(IBullToken token, address to, uint256 value) internal {
-        require(token.transfer(to, value), "SafeERC20: transfer failed");
+    function safeTransfer(IBullToken yion, address to, uint256 value) internal {
+        require(yion.transfer(to, value), "SafeERC20: transfer failed");
     }
 
-    function safeTransferFrom(IBullToken token, address from, address to, uint256 value) internal {
-        require(token.transferFrom(from, to, value), "SafeERC20: transferFrom failed");
+    function safeTransferFrom(IBullToken yion, address from, address to, uint256 value) internal {
+        require(yion.transferFrom(from, to, value), "SafeERC20: transferFrom failed");
     }
 
-    function safeIncreaseAllowance(IBullToken token, address spender, uint256 value) internal {
-        uint256 currentAllowance = token.allowance(address(this), spender);
-        require(token.approve(spender, currentAllowance + value), "SafeERC20: approve failed");
+    function safeIncreaseAllowance(IBullToken yion, address spender, uint256 value) internal {
+        uint256 currentAllowance = yion.allowance(address(this), spender);
+        require(yion.approve(spender, currentAllowance + value), "SafeERC20: approve failed");
     }
 }
 
@@ -83,15 +83,14 @@ interface IBullRewardPool {
 contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     using SafeBullERC20 for IBullToken;
 
-    uint256 public dpegTokenDecimals;
+    uint256 public yionUnit;
 
-    IBullTokenMetadata public dpegToken;
-    address public dpegTokenAddress;
+    IBullTokenMetadata public yionMetadata;
+    address public yionAddress;
 
     address public gameRewardPoolAddress;
     address public constant blackHoleAddress = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public constant FEW_PERSON_ROOM = 3;
     uint256 public constant MULTI_PERSON_ROOM = 5;
 
     uint256 public constant TOTAL_ROOMS = 15;
@@ -130,6 +129,7 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     event UserEnteredRoomWithRound(address indexed user, uint256 indexed level, uint256 amount, uint256 round);
     event UsdtPriceQuoted(address indexed player, uint256 usdtPriceCents, uint256 tokenAmount);
     event RoomFinished(uint256 indexed level, uint256 indexed round, address indexed winner, uint256 totalAmount);
+    event RoomRefunded(uint256 indexed level, uint256 indexed round, uint256 totalRefunded);
     event SettlementModeSelected(
         uint256 indexed level,
         bool usdtMode,
@@ -140,14 +140,14 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     event RoomReset(uint256 indexed level, uint256 newRound);
     event RewardPoolChanged(address indexed oldRewardPool, address indexed newRewardPool);
 
-    constructor(address beneficiary, address _gameRewardPoolAddress, address _dpegAddress) payable BullOwnable(beneficiary) {
+    constructor(address beneficiary, address _gameRewardPoolAddress, address _yionAddress) payable BullOwnable(beneficiary) {
         require(_gameRewardPoolAddress != address(0), "Reward pool is zero");
-        require(_dpegAddress != address(0), "Token is zero");
+        require(_yionAddress != address(0), "YION is zero");
 
         gameRewardPoolAddress = _gameRewardPoolAddress;
-        dpegToken = IBullTokenMetadata(_dpegAddress);
-        dpegTokenAddress = _dpegAddress;
-        dpegTokenDecimals = 10 ** dpegToken.decimals();
+        yionMetadata = IBullTokenMetadata(_yionAddress);
+        yionAddress = _yionAddress;
+        yionUnit = 10 ** yionMetadata.decimals();
 
         // 0-14：15 个 5 人房，每位玩家入场费统一为 5 USDT。
         for (uint256 level = 0; level < TOTAL_ROOMS; level++) {
@@ -175,14 +175,14 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         require(userRoomLevels[msg.sender] == 0 || !_isUserInRoom(msg.sender), "User already in room");
         require(roomPlayerInfo[level][msg.sender].account == address(0), "User already in this room");
 
-        uint256 tokenAmount = _quoteTokenAmount(room.roomAmount);
-        require(IBullToken(dpegTokenAddress).allowance(msg.sender, address(this)) >= tokenAmount, "Token allowance is not enough");
+        uint256 yionAmount = _quoteTokenAmount(room.roomAmount);
+        require(IBullToken(yionAddress).allowance(msg.sender, address(this)) >= yionAmount, "YION allowance is not enough");
 
-        IBullToken token = IBullToken(dpegTokenAddress);
-        token.safeTransferFrom(msg.sender, address(this), tokenAmount);
+        IBullToken yion = IBullToken(yionAddress);
+        yion.safeTransferFrom(msg.sender, address(this), yionAmount);
 
         roomPlayers[level].push(msg.sender);
-        roomPlayerInfo[level][msg.sender] = PlayerInfo(msg.sender, tokenAmount, contractRounds[level]);
+        roomPlayerInfo[level][msg.sender] = PlayerInfo(msg.sender, yionAmount, contractRounds[level]);
         userRoomLevels[msg.sender] = level + 1;
 
         room.currentUserNumber++;
@@ -190,9 +190,9 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
             room.enable = false;
         }
 
-        emit UsdtPriceQuoted(msg.sender, room.roomAmount, tokenAmount);
-        emit UserEnteredRoom(msg.sender, level, tokenAmount);
-        emit UserEnteredRoomWithRound(msg.sender, level, tokenAmount, contractRounds[level]);
+        emit UsdtPriceQuoted(msg.sender, room.roomAmount, yionAmount);
+        emit UserEnteredRoom(msg.sender, level, yionAmount);
+        emit UserEnteredRoomWithRound(msg.sender, level, yionAmount, contractRounds[level]);
     }
 
     receive() external payable {}
@@ -229,6 +229,29 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         emit RoomFinished(level, finishedRound, winner, totalUsdtCents);
     }
 
+    /**
+     * @notice 异常释放房间，原路退回当前所有玩家入房时托管的 YION。
+     */
+    function refundRoom(uint256 level) external onlyOwner nonReentrant {
+        require(level < TOTAL_ROOMS, "Invalid room level");
+        address[] storage players = roomPlayers[level];
+        require(players.length > 0, "Room has no players");
+
+        IBullToken yion = IBullToken(yionAddress);
+        uint256 totalRefunded;
+        uint256 refundedRound = contractRounds[level];
+        for (uint256 i = 0; i < players.length; i++) {
+            uint256 amount = roomPlayerInfo[level][players[i]].amount;
+            if (amount > 0) {
+                totalRefunded += amount;
+                yion.safeTransfer(players[i], amount);
+            }
+        }
+
+        _resetRoom(level);
+        emit RoomRefunded(level, refundedRound, totalRefunded);
+    }
+
     function _distributeRewards(
         uint256 totalUsdtCents,
         uint256 escrowToken,
@@ -237,8 +260,8 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         address[] memory directUser,
         address[] memory indirectUser
     ) internal returns (uint256 paidToken, uint256 quotedTokenRequired, bool usdtMode) {
-        // Quote the whole round once so the mode decision and the final amount
-        // use exactly the same Token/USDT price snapshot.
+        // 当前报价所需 YION 不超过房间托管额时，按当前 USDT 等值结算；
+        // 超过托管额时，最多按本局实际托管余额结算。
         quotedTokenRequired = _quoteTokenAmount(totalUsdtCents);
         usdtMode = quotedTokenRequired <= escrowToken;
         uint256 settlementToken = usdtMode ? quotedTokenRequired : escrowToken;
@@ -248,13 +271,13 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
             directUser.length,
             indirectUser.length
         );
-        IBullToken token = IBullToken(dpegTokenAddress);
-        require(token.balanceOf(address(this)) >= reward.totalPaid, "Contract token balance is not enough");
+        IBullToken yion = IBullToken(yionAddress);
+        require(yion.balanceOf(address(this)) >= reward.totalPaid, "Contract YION balance is not enough");
 
-        token.safeTransfer(winner, reward.winner);
-        _distributePoolRewards(token, reward.blackHole, reward.replenish, reward.rank);
-        _transferReferralRewards(token, directUser, reward.directPerUser, "Direct user address is zero");
-        _transferReferralRewards(token, indirectUser, reward.indirectPerUser, "Indirect user address is zero");
+        yion.safeTransfer(winner, reward.winner);
+        _distributePoolRewards(yion, reward.blackHole, reward.replenish, reward.rank);
+        _transferReferralRewards(yion, directUser, reward.directPerUser, "Direct user address is zero");
+        _transferReferralRewards(yion, indirectUser, reward.indirectPerUser, "Indirect user address is zero");
         return (reward.totalPaid, quotedTokenRequired, usdtMode);
     }
 
@@ -280,25 +303,25 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     }
 
     function _distributePoolRewards(
-        IBullToken token,
+        IBullToken yion,
         uint256 blackHoleAmount,
         uint256 replenishAmount,
         uint256 rankAmount
     ) internal {
-        token.safeTransfer(blackHoleAddress, blackHoleAmount);
+        yion.safeTransfer(blackHoleAddress, blackHoleAmount);
         _depositReplenishReward(replenishAmount);
         _depositRankReward(rankAmount);
     }
 
     function _transferReferralRewards(
-        IBullToken token,
+        IBullToken yion,
         address[] memory users,
         uint256 amount,
         string memory zeroAddressMessage
     ) internal {
         for (uint256 i = 0; i < users.length; i++) {
             require(users[i] != address(0), zeroAddressMessage);
-            token.safeTransfer(users[i], amount);
+            yion.safeTransfer(users[i], amount);
         }
     }
 
@@ -375,18 +398,18 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
     }
 
     function _depositRankReward(uint256 amount) internal {
-        IBullToken token = IBullToken(dpegTokenAddress);
-        token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
+        IBullToken yion = IBullToken(yionAddress);
+        yion.safeIncreaseAllowance(gameRewardPoolAddress, amount);
         IBullRewardPool(gameRewardPoolAddress).depositRankReward(amount);
     }
 
     function _depositReplenishReward(uint256 amount) internal {
-        IBullToken token = IBullToken(dpegTokenAddress);
-        token.safeIncreaseAllowance(gameRewardPoolAddress, amount);
+        IBullToken yion = IBullToken(yionAddress);
+        yion.safeIncreaseAllowance(gameRewardPoolAddress, amount);
         IBullRewardPool(gameRewardPoolAddress).depositReplenishReward(amount);
     }
 
     function _paymentToken() internal view override returns (address) {
-        return dpegTokenAddress;
+        return yionAddress;
     }
 }

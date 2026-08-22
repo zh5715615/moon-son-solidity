@@ -39,11 +39,8 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     error RoomNotLocked();
     error RoomFull();
     error AlreadyInRoom();
-    error PlayerNotInRoom();
     error InvalidArrayLength();
     error InvalidRecipient();
-    error DuplicateRecipient();
-    error InvalidPayoutTotal();
     error InvalidWinner();
     error InvalidBetAmount();
     error InvalidBetTotal();
@@ -60,13 +57,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     uint256 public constant TOTAL_ROOMS = 20;
     uint256 public constant THREE_PLAYER_ENTRY_FEE_USDT_CENTS = 200;
     uint256 public constant FIVE_PLAYER_ENTRY_FEE_USDT_CENTS = 400;
-    // 最大房间容量；具体房间是 3 人场还是 5 人场，由 _configOf(roomId) 决定。
-    uint256 public constant ROOM_PLAYERS = 5;
-
-    IGoldenFlowerToken public immutable token;
+    IGoldenFlowerToken public immutable yion;
     address public immutable dealer;
     address public immutable rewardPool;
-    uint256 public immutable tokenUnit;
+    uint256 public immutable yionUnit;
 
     enum RoomStatus { Waiting, Locked }
 
@@ -144,17 +138,16 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         _;
     }
 
-    constructor(address _token, address _dealer, address _rewardPool) {
-        if (_token == address(0)) revert InvalidTokenReceiver();
+    constructor(address _yion, address _dealer, address _rewardPool) {
+        if (_yion == address(0)) revert InvalidTokenReceiver();
         if (_dealer == address(0)) revert InvalidRecipient();
         if (_rewardPool == address(0)) revert InvalidPoolAddress();
-        token = IGoldenFlowerToken(_token);
+        yion = IGoldenFlowerToken(_yion);
         dealer = _dealer;
         rewardPool = _rewardPool;
-        tokenUnit = 10 ** uint256(IGoldenFlowerToken(_token).decimals());
+        yionUnit = 10 ** uint256(IGoldenFlowerToken(_yion).decimals());
 
         for (uint256 i = 1; i <= TOTAL_ROOMS; i++) {
-            rooms[i].status = RoomStatus.Waiting;
             rooms[i].roundNumber = 1;
         }
     }
@@ -538,21 +531,13 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         if (_sumRange(values, 7 + values[5], values[6]) != totalBet * 2 / 100) revert InvalidReferralAmount();
     }
 
-    function _hasDuplicateRecipient(address[] calldata recipients, uint256 index) internal pure returns (bool) {
-        address current = recipients[index];
-        for (uint256 i = 2; i < index; i++) {
-            if (recipients[i] == current) return true;
-        }
-        return false;
-    }
-
     function _depositRankReward(uint256 amount) internal {
-        if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
+        if (!yion.approve(rewardPool, amount)) revert TokenTransferFailed();
         IGoldenFlowerRewardPool(rewardPool).depositRankReward(amount);
     }
 
     function _depositReplenishReward(uint256 amount) internal {
-        if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
+        if (!yion.approve(rewardPool, amount)) revert TokenTransferFailed();
         IGoldenFlowerRewardPool(rewardPool).depositReplenishReward(amount);
     }
 
@@ -571,23 +556,23 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      */
     function _requireTokenFunds(address from, uint256 amount) internal view {
         if (amount == 0) revert TokenAmountMustBePositive();
-        if (token.balanceOf(from) < amount) revert InsufficientTokenBalance();
-        if (token.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
+        if (yion.balanceOf(from) < amount) revert InsufficientTokenBalance();
+        if (yion.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
     }
 
     function _safeTransferFrom(address from, uint256 amount) internal {
         _requireTokenFunds(from, amount);
-        if (!token.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
+        if (!yion.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
     }
 
     function _safeTransfer(address to, uint256 amount) internal {
         if (to == address(0)) revert InvalidTokenReceiver();
         if (amount == 0) revert TokenAmountMustBePositive();
-        if (token.balanceOf(address(this)) < amount) revert InsufficientContractTokenBalance();
-        if (!token.transfer(to, amount)) revert TokenTransferFailed();
+        if (yion.balanceOf(address(this)) < amount) revert InsufficientContractTokenBalance();
+        if (!yion.transfer(to, amount)) revert TokenTransferFailed();
     }
 
     function _paymentToken() internal view override returns (address) {
-        return address(token);
+        return address(yion);
     }
 }

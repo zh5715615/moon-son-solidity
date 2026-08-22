@@ -5,16 +5,16 @@ module.exports = async function (callback) {
   try {
     const accounts = await web3.eth.getAccounts();
     const deployer = accounts[0];
-    const token = process.env.TOKEN_ADDRESS;
+    const yion = process.env.YION_ADDRESS || process.env.TOKEN_ADDRESS;
 
-    if (!token) throw new Error("TOKEN_ADDRESS is required");
+    if (!yion) throw new Error("YION_ADDRESS is required");
 
     const balance = await web3.eth.getBalance(deployer);
     console.log(`Deploying GameRewardPool from ${deployer}`);
     console.log(`Deployer native balance: ${web3.utils.fromWei(balance, "ether")}`);
-    console.log(`Token: ${token}`);
+    console.log(`YION: ${yion}`);
 
-    const instance = await GameRewardPool.new(token, { from: deployer });
+    const instance = await GameRewardPool.new(yion, { from: deployer });
     console.log(`GameRewardPool deployed: ${instance.address}`);
     console.log(`Transaction hash: ${instance.transactionHash}`);
     await recordDeployment({
@@ -22,7 +22,7 @@ module.exports = async function (callback) {
       contract: "GameRewardPool",
       instance,
       deployer,
-      constructorArguments: { token },
+      constructorArguments: { yion },
     });
     callback();
   } catch (error) {

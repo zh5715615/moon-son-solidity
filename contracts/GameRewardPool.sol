@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @notice 多游戏共享奖励池，独立管理日结排名奖池和权益回补奖池。
  *
  * 使用方式：
- * 1. 部署时传入同一个游戏 token 地址。
+ * 1. 部署时传入 YION 地址。
  * 2. GoldenFlower、Bullfigthing 等游戏合约结算时，把排名池资金、回补池资金存入本合约。
  * 3. 合约 owner 按业务计算结果调用 sendRankReward / sendReplenishReward，把奖励记录到 userReward。
  * 4. 用户调用 withdrawRankReward / withdrawReplenishReward 自己提取奖励。
@@ -36,7 +36,7 @@ contract GameRewardPool is ReentrancyGuard {
         uint256 replenishReward;
     }
 
-    IERC20 public immutable token;
+    IERC20 public immutable yion;
     address public owner;
 
     // 用户奖励记录。owner 只累加记录，用户自己提现。
@@ -61,9 +61,9 @@ contract GameRewardPool is ReentrancyGuard {
         _;
     }
 
-    constructor(address _token) {
-        if (_token == address(0)) revert InvalidAddress();
-        token = IERC20(_token);
+    constructor(address _yion) {
+        if (_yion == address(0)) revert InvalidAddress();
+        yion = IERC20(_yion);
         owner = msg.sender;
         emit OwnershipTransferred(address(0), msg.sender);
     }
@@ -182,11 +182,11 @@ contract GameRewardPool is ReentrancyGuard {
         // 检查转移数量是否为0，如果是则抛出错误
         if (amount == 0) revert TokenAmountMustBePositive();
         // 检查发送方余额是否足够，如果不足则抛出错误
-        if (token.balanceOf(from) < amount) revert InsufficientTokenBalance();
+        if (yion.balanceOf(from) < amount) revert InsufficientTokenBalance();
         // 检查发送方授权额度是否足够，如果不足则抛出错误
-        if (token.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
+        if (yion.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
         // 执行代币转移，如果失败则抛出错误
-        if (!token.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
+        if (!yion.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
     }
 
     /**
@@ -206,9 +206,9 @@ contract GameRewardPool is ReentrancyGuard {
         // 检查转账数量是否为零，如果是则抛出代币数量必须为正数的错误
         if (amount == 0) revert TokenAmountMustBePositive();
         // 检查合约余额是否足够，如果不足则抛出余额不足的错误
-        if (token.balanceOf(address(this)) < amount) revert InsufficientTokenBalance();
+        if (yion.balanceOf(address(this)) < amount) revert InsufficientTokenBalance();
         // 执行代币转账，如果失败则抛出转账失败错误
-        if (!token.transfer(to, amount)) revert TokenTransferFailed();
+        if (!yion.transfer(to, amount)) revert TokenTransferFailed();
     }
 
     /**

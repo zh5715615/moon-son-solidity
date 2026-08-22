@@ -5,7 +5,7 @@ module.exports = async function (callback) {
   try {
     const [account] = await web3.eth.getAccounts();
     const bull = await Bullfigthing.at(process.env.BULLFIGTHING_ADDRESS);
-    const token = await MockToken.at(process.env.TOKEN_ADDRESS);
+    const yion = await MockToken.at(process.env.YION_ADDRESS || process.env.TOKEN_ADDRESS);
     const usdtPriceCents = 3000;
     const quotedTokenAmount = await bull.quoteTokenAmount(usdtPriceCents);
 
@@ -14,7 +14,7 @@ module.exports = async function (callback) {
     console.log(`USDT price cents: ${usdtPriceCents}`);
     console.log(`Quoted token amount (raw): ${quotedTokenAmount.toString()}`);
 
-    const approval = await token.approve(bull.address, quotedTokenAmount, { from: account });
+    const approval = await yion.approve(bull.address, quotedTokenAmount, { from: account });
     console.log(`Approval transaction: ${approval.tx}`);
 
     const entry = await bull.enterTheRoom(0, { from: account });

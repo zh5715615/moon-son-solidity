@@ -26,6 +26,7 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
 
   it("locks and refunds a Landlords room", async () => {
     const game = await Landlords.new(token.address, dealer, pool.address, { from: owner });
+    assert.equal(await game.yion(), token.address);
     const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
@@ -35,6 +36,7 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
     assert.equal(room.values[4].toString(), "200", "bet price is 2.00 USDT");
     assert.equal(room.values[5].toString(), "200", "entry price is 2.00 USDT");
     assert.equal((await game.TOTAL_ROOMS()).toString(), "12");
+    assert.equal((await game.quoteYionAmount(200)).toString(), tokens(2));
     const lastRoom = await game.getRoomInfo(12);
     assert.equal(lastRoom.values[4].toString(), "200");
     assert.equal(lastRoom.values[5].toString(), "200");
@@ -102,6 +104,7 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
 
   it("locks and refunds a three-player GoldenFlower room", async () => {
     const game = await GoldenFlower.new(token.address, dealer, pool.address, { from: owner });
+    assert.equal(await game.yion(), token.address);
     const deposit = tokens(2);
     await approveAndJoin(game, "joinRoom", 1, [player1, player2, player3], deposit);
 
@@ -111,6 +114,8 @@ contract("Room escrow games", ([owner, dealer, player1, player2, player3, outsid
     assert.equal(room.values[4].toString(), "200");
     assert.equal(room.values[5].toString(), "200");
     assert.equal((await game.TOTAL_ROOMS()).toString(), "20");
+    assert.equal((await game.quoteYionAmount(200)).toString(), tokens(2));
+    assert.equal((await game.quoteYionAmount(400)).toString(), tokens(4));
     const lastRoom = await game.getRoomInfo(20);
     assert.equal(lastRoom.values[4].toString(), "400");
     assert.equal(lastRoom.values[5].toString(), "400");

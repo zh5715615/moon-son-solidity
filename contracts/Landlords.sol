@@ -38,7 +38,6 @@ contract Landlords is PancakeV2UsdtQuote {
     error InvalidBetAmount();
     error InvalidBetTotal();
     error InvalidRewardAmount();
-    error InvalidPayoutTotal();
     error TokenAmountMustBePositive();
     error InsufficientTokenBalance();
     error InsufficientTokenAllowance();
@@ -50,10 +49,10 @@ contract Landlords is PancakeV2UsdtQuote {
     uint256 public constant ROOM_PLAYERS = 3;
     uint256 public constant ENTRY_FEE_USDT_CENTS = 200;
 
-    ILandlordsToken public immutable token;
+    ILandlordsToken public immutable yion;
     address public immutable dealer;
     address public immutable rewardPool;
-    uint256 public immutable tokenUnit;
+    uint256 public immutable yionUnit;
 
     enum RoomStatus { Waiting, Locked }
 
@@ -114,14 +113,14 @@ contract Landlords is PancakeV2UsdtQuote {
         _;
     }
 
-    constructor(address tokenAddress, address dealerAddress, address rewardPoolAddress) {
-        if (tokenAddress == address(0) || dealerAddress == address(0) || rewardPoolAddress == address(0)) {
+    constructor(address yionAddress, address dealerAddress, address rewardPoolAddress) {
+        if (yionAddress == address(0) || dealerAddress == address(0) || rewardPoolAddress == address(0)) {
             revert InvalidRecipient();
         }
-        token = ILandlordsToken(tokenAddress);
+        yion = ILandlordsToken(yionAddress);
         dealer = dealerAddress;
         rewardPool = rewardPoolAddress;
-        tokenUnit = 10 ** uint256(ILandlordsToken(tokenAddress).decimals());
+        yionUnit = 10 ** uint256(ILandlordsToken(yionAddress).decimals());
         for (uint256 i = 1; i <= TOTAL_ROOMS; i++) {
             rooms[i].roundNumber = 1;
         }
@@ -255,7 +254,7 @@ contract Landlords is PancakeV2UsdtQuote {
         joined = roomId != 0;
     }
 
-    function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
+    function _configOf(uint256 roomId) internal pure returns (RoomConfig memory) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
         return RoomConfig(ENTRY_FEE_USDT_CENTS, ENTRY_FEE_USDT_CENTS);
     }
@@ -400,31 +399,31 @@ contract Landlords is PancakeV2UsdtQuote {
     }
 
     function _depositRankReward(uint256 amount) internal {
-        if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
+        if (!yion.approve(rewardPool, amount)) revert TokenTransferFailed();
         ILandlordsRewardPool(rewardPool).depositRankReward(amount);
     }
 
     function _depositReplenishReward(uint256 amount) internal {
-        if (!token.approve(rewardPool, amount)) revert TokenTransferFailed();
+        if (!yion.approve(rewardPool, amount)) revert TokenTransferFailed();
         ILandlordsRewardPool(rewardPool).depositReplenishReward(amount);
     }
 
     function _safeTransferFrom(address from, uint256 amount) internal {
         if (amount == 0) revert TokenAmountMustBePositive();
-        if (token.balanceOf(from) < amount) revert InsufficientTokenBalance();
-        if (token.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
-        if (!token.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
+        if (yion.balanceOf(from) < amount) revert InsufficientTokenBalance();
+        if (yion.allowance(from, address(this)) < amount) revert InsufficientTokenAllowance();
+        if (!yion.transferFrom(from, address(this), amount)) revert TokenTransferFromFailed();
     }
 
     function _safeTransfer(address to, uint256 amount) internal {
         if (to == address(0)) revert InvalidRecipient();
         if (amount == 0) revert TokenAmountMustBePositive();
-        if (token.balanceOf(address(this)) < amount) revert InsufficientContractTokenBalance();
-        if (!token.transfer(to, amount)) revert TokenTransferFailed();
+        if (yion.balanceOf(address(this)) < amount) revert InsufficientContractTokenBalance();
+        if (!yion.transfer(to, amount)) revert TokenTransferFailed();
     }
 
     function _paymentToken() internal view override returns (address) {
-        return address(token);
+        return address(yion);
     }
 
     function _resetRoom(uint256 roomId) internal {

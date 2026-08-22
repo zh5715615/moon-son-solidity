@@ -6,28 +6,28 @@ const Bullfigthing = artifacts.require("Bullfigthing");
 
 module.exports = async function (deployer, network, accounts) {
   const isLocal = network === "development" || network === "test";
-  let tokenAddress = process.env.TOKEN_ADDRESS;
+  let yionAddress = process.env.YION_ADDRESS || process.env.TOKEN_ADDRESS;
 
-  if (!tokenAddress) {
+  if (!yionAddress) {
     if (!isLocal) {
-      throw new Error("TOKEN_ADDRESS is required for non-local deployments");
+      throw new Error("YION_ADDRESS is required for non-local deployments");
     }
     await deployer.deploy(MockToken);
-    tokenAddress = MockToken.address;
+    yionAddress = MockToken.address;
   }
 
   const dealer = process.env.DEALER_ADDRESS || accounts[0];
   const bullOwner = process.env.BULL_OWNER_ADDRESS || accounts[0];
 
-  await deployer.deploy(GameRewardPool, tokenAddress);
+  await deployer.deploy(GameRewardPool, yionAddress);
   const rewardPoolAddress = GameRewardPool.address;
 
-  await deployer.deploy(Landlords, tokenAddress, dealer, rewardPoolAddress);
-  await deployer.deploy(GoldenFlower, tokenAddress, dealer, rewardPoolAddress);
-  await deployer.deploy(Bullfigthing, bullOwner, rewardPoolAddress, tokenAddress);
+  await deployer.deploy(Landlords, yionAddress, dealer, rewardPoolAddress);
+  await deployer.deploy(GoldenFlower, yionAddress, dealer, rewardPoolAddress);
+  await deployer.deploy(Bullfigthing, bullOwner, rewardPoolAddress, yionAddress);
 
   console.log("Deployment summary:");
-  console.log(`  Token:          ${tokenAddress}`);
+  console.log(`  YION:           ${yionAddress}`);
   console.log(`  GameRewardPool: ${rewardPoolAddress}`);
   console.log(`  Landlords:      ${Landlords.address}`);
   console.log(`  GoldenFlower:   ${GoldenFlower.address}`);

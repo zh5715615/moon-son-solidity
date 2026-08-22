@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 interface IPancakeV2RouterQuote {
-    function getAmountsIn(uint256 amountOut, address[] calldata path)
+    function getAmountsOut(uint256 amountIn, address[] calldata path)
         external
         view
         returns (uint256[] memory amounts);
@@ -46,16 +46,24 @@ abstract contract PancakeV2UsdtQuote {
         return _quoteTokenAmount(usdtPriceCents);
     }
 
+    /**
+     * @notice 返回指定 USDT 美分金额当前等值的 YION 数量。
+     * @param usdtPriceCents USDT 美分金额，例如 500 表示 5.00 USDT。
+     */
+    function quoteYionAmount(uint256 usdtPriceCents) public view returns (uint256) {
+        return _quoteTokenAmount(usdtPriceCents);
+    }
+
     function _quoteTokenAmount(uint256 usdtPriceCents) internal view virtual returns (uint256 tokenAmount) {
         if (usdtPriceCents == 0) revert InvalidUsdtPrice();
 
         address[] memory path = new address[](2);
-        path[0] = _paymentToken();
-        path[1] = usdtToken();
+        path[0] = usdtToken();
+        path[1] = _paymentToken();
 
         uint256 usdtAmount = usdtPriceCents * USDT_UNIT / USDT_PRICE_SCALE;
-        uint256[] memory amounts = IPancakeV2RouterQuote(pancakeV2Router()).getAmountsIn(usdtAmount, path);
-        if (amounts.length != 2 || amounts[0] == 0) revert InvalidPancakeQuote();
-        return amounts[0];
+        uint256[] memory amounts = IPancakeV2RouterQuote(pancakeV2Router()).getAmountsOut(usdtAmount, path);
+        if (amounts.length != 2 || amounts[1] == 0) revert InvalidPancakeQuote();
+        return amounts[1];
     }
 }

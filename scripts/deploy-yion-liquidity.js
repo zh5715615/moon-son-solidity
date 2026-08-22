@@ -3,7 +3,6 @@ const { recordDeployment, recordLiquidity } = require("./lib/record-deployment")
 
 const BSC_TESTNET_USDT = "0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5";
 const BSC_TESTNET_V2_ROUTER = "0xD99D1c33F9fC3444f8101754aBC46c52416550D1";
-const YION_SUPPLY = "100000000";
 const USDT_LIQUIDITY = "10000";
 
 const ERC20_ABI = [

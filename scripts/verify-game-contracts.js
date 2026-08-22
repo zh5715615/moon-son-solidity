@@ -11,20 +11,20 @@ module.exports = async function (callback) {
     const checks = {
       landlords: {
         code: (await web3.eth.getCode(landlords.address)).length > 2,
-        token: await landlords.token(),
+        yion: await landlords.yion(),
         dealer: await landlords.dealer(),
         rewardPool: await landlords.rewardPool(),
       },
       goldenFlower: {
         code: (await web3.eth.getCode(goldenFlower.address)).length > 2,
-        token: await goldenFlower.token(),
+        yion: await goldenFlower.yion(),
         dealer: await goldenFlower.dealer(),
         rewardPool: await goldenFlower.rewardPool(),
       },
       bullfigthing: {
         code: (await web3.eth.getCode(bullfigthing.address)).length > 2,
         owner: await bullfigthing.owner(),
-        token: await bullfigthing.dpegTokenAddress(),
+        yion: await bullfigthing.yionAddress(),
         rewardPool: await bullfigthing.gameRewardPoolAddress(),
       },
     };

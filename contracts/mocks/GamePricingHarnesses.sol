@@ -12,8 +12,8 @@ import "../Bullfigthing.sol";
 contract LandlordsPricingHarness is Landlords {
     uint256 public quoteBps = 10_000;
 
-    constructor(address tokenAddress, address dealerAddress, address rewardPoolAddress)
-        Landlords(tokenAddress, dealerAddress, rewardPoolAddress)
+    constructor(address yionAddress, address dealerAddress, address rewardPoolAddress)
+        Landlords(yionAddress, dealerAddress, rewardPoolAddress)
     {}
 
     function setQuoteBps(uint256 newQuoteBps) external {
@@ -28,8 +28,8 @@ contract LandlordsPricingHarness is Landlords {
 contract GoldenFlowerPricingHarness is GoldenFlower {
     uint256 public quoteBps = 10_000;
 
-    constructor(address tokenAddress, address dealerAddress, address rewardPoolAddress)
-        GoldenFlower(tokenAddress, dealerAddress, rewardPoolAddress)
+    constructor(address yionAddress, address dealerAddress, address rewardPoolAddress)
+        GoldenFlower(yionAddress, dealerAddress, rewardPoolAddress)
     {}
 
     function setQuoteBps(uint256 newQuoteBps) external {
@@ -44,8 +44,8 @@ contract GoldenFlowerPricingHarness is GoldenFlower {
 contract BullfigthingPricingHarness is Bullfigthing {
     uint256 public quoteBps = 10_000;
 
-    constructor(address beneficiary, address rewardPoolAddress, address tokenAddress)
-        Bullfigthing(beneficiary, rewardPoolAddress, tokenAddress)
+    constructor(address beneficiary, address rewardPoolAddress, address yionAddress)
+        Bullfigthing(beneficiary, rewardPoolAddress, yionAddress)
     {}
 
     function setQuoteBps(uint256 newQuoteBps) external {

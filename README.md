@@ -66,8 +66,8 @@ Copy-Item .env.example .env
 `.env` 示例：
 
 ```dotenv
-# 已存在的业务 Token；单独部署奖励池或游戏合约时使用。
-TOKEN_ADDRESS=0x...
+# 已存在的 YION；单独部署奖励池或游戏合约时使用。
+YION_ADDRESS=0x...
 
 # 已存在的奖励池；单独部署游戏合约时使用。
 REWARD_POOL_ADDRESS=0x...
@@ -92,13 +92,13 @@ NETWORK_ID=*
 | --- | --- | --- |
 | `TESTNET_RPC_URL` | 所有 BSC 测试网部署 | BSC Testnet RPC |
 | `DEPLOYER_PRIVATE_KEY` | 所有 BSC 测试网部署 | 支付 gas 和签名交易 |
-| `TOKEN_ADDRESS` | 单独部署奖励池/游戏 | 指定已有 ERC-20 |
+| `YION_ADDRESS` | 单独部署奖励池/游戏 | 指定已有 YION；兼容旧变量 `TOKEN_ADDRESS` |
 | `REWARD_POOL_ADDRESS` | 单独部署游戏 | 指定已有奖励池 |
 | `DEALER_ADDRESS` | 可选 | 斗地主、炸金花结算账户 |
 | `BULL_OWNER_ADDRESS` | 可选 | 斗牛 owner |
 | `RPC_HOST/RPC_PORT/NETWORK_ID` | 本地外部 Ganache | 本地 RPC 配置 |
 
-一键部署 YION 生态不读取 `TOKEN_ADDRESS` 和 `REWARD_POOL_ADDRESS`，它会创建新的 YION 和奖励池，并把新地址自动传给三个游戏合约。
+YION 生态部署脚本使用交互向导，分别询问是否部署 YION、奖励池和三个游戏合约。选择不部署时，会复用 `deployments/bsc-testnet-97.json` 中最近一次成功部署且依赖匹配的地址；详见第8节。
 
 ## 4. 编译
 
@@ -176,9 +176,9 @@ networkId: 5777
 npm run migrate:local
 ```
 
-如果希望本地自动部署 `MockToken`，请确保 `.env` 中的 `TOKEN_ADDRESS` 为空或被注释。迁移顺序为：
+如果希望本地自动部署 `MockToken`，请确保 `.env` 中的 `YION_ADDRESS` 为空或被注释。迁移顺序为：
 
-1. `MockToken`（仅本地且未配置 `TOKEN_ADDRESS` 时）
+1. `MockToken`（仅本地且未配置 `YION_ADDRESS` 时）
 2. `GameRewardPool`
 3. `Landlords`
 4. `GoldenFlower`
@@ -211,9 +211,9 @@ await game.getRoomInfo(1)
 | 测试网 USDT | `0x5B32Cc7d18643073BDB15dAfafC5C35E736c91a5` |
 | PancakeSwap V2 Router | `0xD99D1c33F9fC3444f8101754aBC46c52416550D1` |
 
-部署账户必须持有足够的测试网 BNB。YION 生态一键部署还要求至少有10,000测试网 USDT，脚本要求 BNB 余额不低于0.2。
+部署账户必须持有足够的测试网 BNB。只有选择部署新 YION 时才要求至少有10,000测试网 USDT，并要求 BNB 余额不低于0.2；仅部署部分合约时按每个合约预留0.04 BNB。
 
-## 8. 一键部署完整 YION 生态
+## 8. YION 生态部署向导
 
 推荐命令：
 
@@ -221,19 +221,50 @@ await game.getRoomInfo(1)
 npm run deploy:yion-ecosystem:testnet
 ```
 
-npm 会先自动执行 `npm run compile`，再按以下顺序发送交易：
+npm 会先自动执行 `npm run compile`，然后依次询问是否部署以下5个合约：
 
-1. 创建 `YION`
-2. 授权并创建 `YION/USDT` 流动性池，注入1亿 YION + 10,000 USDT
-3. 创建以新 YION 为 Token 的 `GameRewardPool`
-4. 创建以新 YION 和新奖励池为参数的 `Bullfigthing`
-5. 创建以新 YION 和新奖励池为参数的 `GoldenFlower`
-6. 创建以新 YION 和新奖励池为参数的 `Landlords`
-7. 调用 `YION.activateTrading(pair)`，启动30分钟白名单期
+1. `YION`
+2. 奖励合约 `GameRewardPool`
+3. 斗牛合约 `Bullfigthing`
+4. 炸金花合约 `GoldenFlower`
+5. 斗地主合约 `Landlords`
+
+每次提示输入 `y` 部署新合约；输入 `n` 或直接回车，则使用 `deployments/bsc-testnet-97.json` 中该合约最近一次成功部署的地址。复用地址会先检查链上代码和构造参数依赖。
+
+如果选择部署新 YION，脚本还会自动创建新的 `YION/USDT` 流动性池，并在其他合约处理完成后激活交易。复用旧 YION 时则复用其最近一次登记的 Pair，不会重复添加流动性或重复激活。
+
+依赖约束：
+
+- 新 YION 必须同时部署新奖励池和三个游戏合约。
+- 新奖励池必须同时部署三个游戏合约。
+- 复用奖励池或游戏时，其登记的 YION、奖励池必须和本次选择一致，否则脚本在发送交易前终止。
 
 虽然叫“一键部署”，但它不是一笔原子交易，而是一条包含多笔链上交易的自动流程。每笔成功部署都会立即写入部署登记。若中途失败，不要直接重复执行，否则会再次创建新的 Token、Pair 或游戏合约；应先检查终端输出和 `deployments/bsc-testnet-97.json`，确认失败发生在哪一步。
 
-### 8.1 只读预检
+### 8.1 非交互选择
+
+服务器或 CI 可以通过环境变量跳过问答：
+
+| 合约 | 环境变量 |
+| --- | --- |
+| YION | `DEPLOY_YION` |
+| GameRewardPool | `DEPLOY_REWARD_POOL` |
+| Bullfigthing | `DEPLOY_BULLFIGTHING` |
+| GoldenFlower | `DEPLOY_GOLDEN_FLOWER` |
+| Landlords | `DEPLOY_LANDLORDS` |
+
+变量支持 `true/false`、`yes/no`、`y/n` 或 `1/0`。例如只重新部署三个游戏：
+
+```powershell
+$env:DEPLOY_YION = "false"
+$env:DEPLOY_REWARD_POOL = "false"
+$env:DEPLOY_BULLFIGTHING = "true"
+$env:DEPLOY_GOLDEN_FLOWER = "true"
+$env:DEPLOY_LANDLORDS = "true"
+npm run deploy:yion-ecosystem:testnet
+```
+
+### 8.2 只读预检
 
 Linux/macOS：
 
@@ -249,9 +280,9 @@ npm run deploy:yion-ecosystem:testnet
 Remove-Item Env:YION_ECOSYSTEM_PREFLIGHT_ONLY
 ```
 
-预检会验证网络、部署账户、BNB 和 USDT 余额，但不会提交任何交易。
+预检仍会显示5次选择提示，并验证网络、部署账户、复用地址、依赖关系、BNB，以及需要新建 YION 时的 USDT 余额，但不会提交任何交易。
 
-### 8.2 YION 参数
+### 8.3 YION 参数
 
 - 名称/符号：`YION` / `YION`
 - decimals：8
@@ -261,13 +292,13 @@ Remove-Item Env:YION_ECOSYSTEM_PREFLIGHT_ONLY
 - 初始比例：`1 USDT = 10,000 YION`
 - LP Token：发送给部署账户
 - 白名单：100个地址，硬编码在 `contracts/YION.sol`
-- 单笔限制：构造时读取 USDT `decimals()`，换算成严格 `< 200 USDT` 的原始单位；正好200 USDT拒绝
+- 单笔限制：构造时读取 USDT `decimals()`，换算成 `200 USDT` 的原始单位；允许正好200 USDT，只有大于200 USDT才拒绝
 - 买入手续费：官方 Pair 输出的 YION 中扣3%，用户实际收到97%，手续费 YION 直接发送到手续费地址
 - 卖出手续费：用户卖出的 YION 中扣3%，官方 Pair 实际收到97%，手续费 YION 直接发送到手续费地址
 - 手续费收款地址：`0xa24bDb249e80574A96D8B02b148E81B9be684675`
 - 免手续费白名单：`feeExempt` 与前30分钟交易白名单相互独立；部署账户和 Token 合约自身默认免手续费，部署账户可通过 `setFeeExempt` 增删地址
 
-### 8.3 激活前后状态
+### 8.4 激活前后状态
 
 | 阶段 | 状态 |
 | --- | --- |
@@ -300,7 +331,7 @@ npm run deploy:yion:testnet
 `.env` 必须配置：
 
 ```dotenv
-TOKEN_ADDRESS=0x...
+YION_ADDRESS=0x...
 ```
 
 执行：
@@ -314,7 +345,7 @@ npm run deploy:pool:testnet
 `.env` 必须配置：
 
 ```dotenv
-TOKEN_ADDRESS=0x...
+YION_ADDRESS=0x...
 REWARD_POOL_ADDRESS=0x...
 DEALER_ADDRESS=0x...
 BULL_OWNER_ADDRESS=0x...
@@ -332,7 +363,35 @@ npm run deploy:games:testnet
 npm run deploy:bull:testnet
 ```
 
-需要 `TOKEN_ADDRESS` 和 `REWARD_POOL_ADDRESS`；`BULL_OWNER_ADDRESS` 可选。
+需要 `YION_ADDRESS` 和 `REWARD_POOL_ADDRESS`；`BULL_OWNER_ADDRESS` 可选。
+
+### 9.5 买入并分发1,000,000 YION
+
+该脚本只允许 `.env` 中私钥对应的签名账户为
+`0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2`。它会从部署登记中读取最新的
+YION、Pair 和 Router，按 PancakeSwap 实时报价精确买入总计1,000,000 YION，
+然后向代码内配置的4个地址各发送250,000 YION。
+
+先执行只读报价和余额检查：
+
+```powershell
+$env:YION_DISTRIBUTION_DRY_RUN = "true"
+npm run buy-distribute:yion:testnet
+```
+
+确认报价后执行真实交易：
+
+```powershell
+$env:YION_DISTRIBUTION_DRY_RUN = "false"
+npm run buy-distribute:yion:testnet
+```
+
+脚本显示最终报价后，输入 `yes` 即可执行（不区分大小写）。自动化环境可以设置
+`CONFIRM_YION_DISTRIBUTION=true` 跳过人工确认。默认允许2%价格滑点，可通过
+`YION_BUY_SLIPPAGE_BPS` 调整，例如 `200` 表示2%。
+
+执行顺序为：必要时授权 USDT、精确买入 YION、依次发送4笔 YION。脚本会拒绝
+错误签名账户、错误 Pair/Router、余额不足，以及仍处于激活后30分钟限制期的 YION。
 
 ## 10. 部署关系与权限
 
@@ -357,7 +416,7 @@ YION
 
 ## 11. 游戏计价与结算
 
-房间金额使用 USDT 美分整数，例如 `500` 表示 `5.00 USDT`，`200` 表示 `2.00 USDT`。玩家进入房间时，游戏合约通过 PancakeSwap V2 的 YION/USDT 直连池调用 `getAmountsIn`，计算并托管所需 YION。
+房间金额使用 USDT 美分整数，例如 `500` 表示 `5.00 USDT`，`200` 表示 `2.00 USDT`。玩家进入房间时，游戏合约通过 PancakeSwap V2 的 YION/USDT 直连池调用 `getAmountsOut`，按“输入 USDT、输出 YION”的买入方向计算并托管 YION，与 PancakeSwap 买入页面的 Router 报价口径一致。
 
 当前源码房间配置：
 
@@ -370,7 +429,7 @@ YION
 前端入房流程：
 
 1. 读取房间 USDT 美分价格。
-2. 调用游戏合约 `quoteTokenAmount(usdtPriceCents)`。
+2. 调用游戏合约 `quoteYionAmount(usdtPriceCents)`（兼容旧接口 `quoteTokenAmount`）。
 3. 对游戏合约授权本次所需 YION，避免无限授权。
 4. 斗地主/炸金花调用 `joinRoom`；斗牛调用 `enterTheRoom`。
 
@@ -432,6 +491,20 @@ Remove-Item Env:MOON_SON_SVC_DIR
 
 生成完成后应在后端执行 `mvnw.cmd -DskipTests compile`，确认业务代码仍与最新 ABI 兼容。Java 类只是链上合约的 Web3j 调用包装，不替代 Solidity 合约本身。
 
+如果已经有单个合约的 `.abi` 和 `.bin` 文件，可直接生成 Java 包装类，无需重新编译全部 Solidity：
+
+```powershell
+npm run generate:java:abi-bin -- --abi ".\path\Contract.abi" --bin ".\path\Contract.bin"
+```
+
+类名默认取 ABI 文件名；对于 solc 生成的 `文件名_sol_合约名.abi` 会自动提取合约名。默认包名为 `tcbv.zhaohui.moon.contract`，输出到 `build/web3j-codegen/custom-output`。也可以指定类名、包名和输出目录：
+
+```powershell
+npm run generate:java:abi-bin -- --abi ".\path\Contract.abi" --bin ".\path\Contract.bin" --name "Contract" --package "com.example.contract" --output ".\generated-java"
+```
+
+该命令使用 `scripts/web3j-codegen-pom.xml` 中固定的 Web3j 5.0.0；机器需安装 Java 和 Maven，也可通过 `JAVA_HOME`、`MAVEN_CMD` 指定位置。
+
 ### 13.1 验证三个游戏配置
 
 Linux/macOS：
@@ -443,7 +516,7 @@ BULLFIGTHING_ADDRESS=0x... \
 npx truffle exec scripts/verify-game-contracts.js --network bscTestnet
 ```
 
-验证内容包括合约代码、Token、奖励池、dealer 和 owner。
+验证内容包括合约代码、YION、奖励池、dealer 和 owner。
 
 ### 13.2 验证 YION 和流动性池
 

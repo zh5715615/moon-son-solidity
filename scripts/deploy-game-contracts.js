@@ -9,10 +9,10 @@ module.exports = async function (callback) {
     const deployer = accounts[0];
     const dealer = process.env.DEALER_ADDRESS || deployer;
     const bullOwner = process.env.BULL_OWNER_ADDRESS || deployer;
-    const token = process.env.TOKEN_ADDRESS;
+    const yion = process.env.YION_ADDRESS || process.env.TOKEN_ADDRESS;
     const rewardPool = process.env.REWARD_POOL_ADDRESS;
 
-    if (!token) throw new Error("TOKEN_ADDRESS is required");
+    if (!yion) throw new Error("YION_ADDRESS is required");
     if (!rewardPool) throw new Error("REWARD_POOL_ADDRESS is required");
 
     const balance = await web3.eth.getBalance(deployer);
@@ -20,10 +20,10 @@ module.exports = async function (callback) {
     console.log(`Deployer native balance: ${web3.utils.fromWei(balance, "ether")}`);
     console.log(`Dealer: ${dealer}`);
     console.log(`Bull owner: ${bullOwner}`);
-    console.log(`Token: ${token}`);
+    console.log(`YION: ${yion}`);
     console.log(`Reward pool: ${rewardPool}`);
 
-    const landlords = await Landlords.new(token, dealer, rewardPool, { from: deployer });
+    const landlords = await Landlords.new(yion, dealer, rewardPool, { from: deployer });
     console.log(`Landlords deployed: ${landlords.address}`);
     console.log(`Landlords transaction: ${landlords.transactionHash}`);
     await recordDeployment({
@@ -31,10 +31,10 @@ module.exports = async function (callback) {
       contract: "Landlords",
       instance: landlords,
       deployer,
-      constructorArguments: { token, dealer, rewardPool },
+      constructorArguments: { yion, dealer, rewardPool },
     });
 
-    const goldenFlower = await GoldenFlower.new(token, dealer, rewardPool, { from: deployer });
+    const goldenFlower = await GoldenFlower.new(yion, dealer, rewardPool, { from: deployer });
     console.log(`GoldenFlower deployed: ${goldenFlower.address}`);
     console.log(`GoldenFlower transaction: ${goldenFlower.transactionHash}`);
     await recordDeployment({
@@ -42,10 +42,10 @@ module.exports = async function (callback) {
       contract: "GoldenFlower",
       instance: goldenFlower,
       deployer,
-      constructorArguments: { token, dealer, rewardPool },
+      constructorArguments: { yion, dealer, rewardPool },
     });
 
-    const bullfigthing = await Bullfigthing.new(bullOwner, rewardPool, token, { from: deployer });
+    const bullfigthing = await Bullfigthing.new(bullOwner, rewardPool, yion, { from: deployer });
     console.log(`Bullfigthing deployed: ${bullfigthing.address}`);
     console.log(`Bullfigthing transaction: ${bullfigthing.transactionHash}`);
     await recordDeployment({
@@ -53,7 +53,7 @@ module.exports = async function (callback) {
       contract: "Bullfigthing",
       instance: bullfigthing,
       deployer,
-      constructorArguments: { beneficiary: bullOwner, rewardPool, token },
+      constructorArguments: { beneficiary: bullOwner, rewardPool, yion },
     });
     callback();
   } catch (error) {

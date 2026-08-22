@@ -11,6 +11,7 @@ contract("Bullfigthing", (accounts) => {
     const token = await MockToken.new({ from: owner });
     const pool = await GameRewardPool.new(token.address, { from: owner });
     const game = await Bullfigthing.new(owner, pool.address, token.address, { from: owner });
+    assert.equal(await game.yionAddress(), token.address);
     const entryAmount = tokens(5);
 
     for (const player of players) {
@@ -69,5 +70,29 @@ contract("Bullfigthing", (accounts) => {
     const lastRoom = await game.getRoomInfo(14);
     assert.equal(lastRoom.values[1].toString(), "500");
     assert.equal((await game.quoteTokenAmount(500)).toString(), tokens(7));
+    assert.equal((await game.quoteYionAmount(500)).toString(), tokens(7));
+  });
+
+  it("refunds each player's original YION escrow when the owner releases a room", async () => {
+    const token = await MockToken.new({ from: owner });
+    const pool = await GameRewardPool.new(token.address, { from: owner });
+    const game = await Bullfigthing.new(owner, pool.address, token.address, { from: owner });
+    const entryAmount = tokens(5);
+
+    for (const player of players.slice(0, 2)) {
+      await token.mint(player, entryAmount, { from: owner });
+      await token.approve(game.address, entryAmount, { from: player });
+      await game.enterTheRoom(0, { from: player });
+    }
+
+    const receipt = await game.refundRoom(0, { from: owner });
+    const event = receipt.logs.find((log) => log.event === "RoomRefunded");
+
+    assert.equal(event.args.totalRefunded.toString(), tokens(10));
+    assert.equal((await token.balanceOf(winner)).toString(), entryAmount);
+    assert.equal((await token.balanceOf(player2)).toString(), entryAmount);
+    assert.equal((await token.balanceOf(game.address)).toString(), "0");
+    const room = await game.getRoomInfo(0);
+    assert.equal(room.values[2].toString(), "0");
   });
 });

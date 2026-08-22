@@ -61,8 +61,9 @@
   `500 = 5.00 USDT`；炸金花 20 个房，前 10 个 3 人房入场费 `200 = 2.00 USDT`，
   后 10 个 5 人房入场费 `400 = 4.00 USDT`；斗地主 12 个 3 人房，入场费
   `200 = 2.00 USDT`。
-- 玩家仍使用业务 Token 支付；入房时通过 PancakeSwap V2 `getAmountsIn`
-  按当前 Token/USDT 直连池报价计算 Token 托管数量。
+- 玩家仍使用业务 Token 支付；入房时通过 PancakeSwap V2 `getAmountsOut`
+  按“输入 USDT、输出 YION”的买入方向计算 Token 托管数量，与 PancakeSwap
+  买入页面的 Router 报价口径一致。
 - Chain ID 56 自动使用 BSC 主网 USDT/Router；Chain ID 97 自动使用测试网
   USDT/Router；其他链拒绝报价。
 - 每个玩家的 Token 托管数量按其入房时的报价独立记录。
