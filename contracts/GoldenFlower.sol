@@ -55,8 +55,8 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     error TokenTransferFailed();
 
     uint256 public constant TOTAL_ROOMS = 20;
-    uint256 public constant THREE_PLAYER_ENTRY_FEE_USDT_CENTS = 200;
-    uint256 public constant FIVE_PLAYER_ENTRY_FEE_USDT_CENTS = 400;
+    uint256 public constant FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS = 200;
+    uint256 public constant FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS = 400;
     IGoldenFlowerToken public immutable yion;
     address public immutable dealer;
     address public immutable rewardPool;
@@ -157,11 +157,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      */
     function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
-        bool isThreePlayerRoom = roomId <= 10;
-        uint256 playerCapacity = isThreePlayerRoom ? 3 : 5;
-        uint256 entryFee = isThreePlayerRoom
-            ? THREE_PLAYER_ENTRY_FEE_USDT_CENTS
-            : FIVE_PLAYER_ENTRY_FEE_USDT_CENTS;
+        uint256 playerCapacity = 5;
+        uint256 entryFee = roomId <= 10
+            ? FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS
+            : FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS;
         cfg = RoomConfig({
             betUnit: entryFee,
             maxDeposit: entryFee,
@@ -316,7 +315,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      * [3] = playerCount，当前玩家数量
      * [4] = betUnit，链下积分单位
      * [5] = maxDeposit，单个玩家入房托管上限
-     * [6] = playerCapacity，房间人数上限，值为 3 或 5
+     * [6] = playerCapacity，房间人数上限，固定为 5
      *
      * addrs 索引含义：
      * [0] = player0，第 1 个加入的玩家
@@ -527,8 +526,8 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         uint256 totalBet,
         uint256[] calldata values
     ) internal pure {
-        if (_sumRange(values, 7, values[5]) != totalBet * 3 / 100) revert InvalidReferralAmount();
-        if (_sumRange(values, 7 + values[5], values[6]) != totalBet * 2 / 100) revert InvalidReferralAmount();
+        if (_sumRange(values, 7, values[5]) != totalBet * 2 / 100) revert InvalidReferralAmount();
+        if (_sumRange(values, 7 + values[5], values[6]) != totalBet * 1 / 100) revert InvalidReferralAmount();
     }
 
     function _depositRankReward(uint256 amount) internal {
