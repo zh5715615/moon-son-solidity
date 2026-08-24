@@ -57,7 +57,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     uint256 public constant TOTAL_ROOMS = 20;
     uint256 public constant FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS = 200;
     uint256 public constant FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS = 400;
-    uint256 public constant POINTS_PER_USDT_CENT = 10000;
+    uint256 public constant POINTS_PER_USDT_CENT = 1000;
     IGoldenFlowerToken public immutable yion;
     address public immutable dealer;
     address public immutable rewardPool;
