@@ -57,6 +57,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     uint256 public constant TOTAL_ROOMS = 20;
     uint256 public constant FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS = 200;
     uint256 public constant FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS = 400;
+    uint256 public constant POINTS_PER_USDT_CENT = 10000;
     IGoldenFlowerToken public immutable yion;
     address public immutable dealer;
     address public immutable rewardPool;
@@ -445,7 +446,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         for (uint256 i = 0; i < room.playerCount; i++) {
             address player = room.playerAddrs[i];
             uint256 usdtDeposit = players[roomId][player].usdtDeposit;
-            if (values[i] > usdtDeposit) revert InvalidBetAmount();
+            if (values[i] > usdtDeposit * POINTS_PER_USDT_CENT) revert InvalidBetAmount();
 
             totalBetUsdtCents += values[i];
         }
@@ -476,9 +477,9 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         uint256 totalBetUsdtCents,
         uint256 totalBetToken
     ) internal {
-        uint256 winnerToken = totalBetToken * 70 / 100;
-        uint256 replenishToken = totalBetToken * 10 / 100;
-        uint256 rankToken = totalBetToken * 5 / 100;
+        uint256 winnerToken = totalBetToken * 90 / 100;
+        uint256 replenishToken = totalBetToken * 2 / 100;
+        uint256 rankToken = totalBetToken * 2 / 100;
         uint256 mappedToken;
         for (uint256 i = 0; i < values[5] + values[6]; i++) {
             if (addrs[i + 2] == address(0)) revert InvalidRecipient();
@@ -508,8 +509,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         for (uint256 i = 0; i < room.playerCount; i++) {
             address playerAddress = room.playerAddrs[i];
             Player storage player = players[roomId][playerAddress];
-            uint256 refundUsdtCents = player.usdtDeposit - values[i];
-            uint256 refundToken = settlementToken * refundUsdtCents / totalEscrowUsdtCents;
+            uint256 depositPoints = player.usdtDeposit * POINTS_PER_USDT_CENT;
+            uint256 refundPoints = depositPoints - values[i];
+            uint256 totalEscrowPoints = totalEscrowUsdtCents * POINTS_PER_USDT_CENT;
+            uint256 refundToken = settlementToken * refundPoints / totalEscrowPoints;
             totalRefundToken += refundToken;
             if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
         }
