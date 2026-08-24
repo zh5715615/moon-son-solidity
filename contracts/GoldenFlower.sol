@@ -19,7 +19,7 @@ interface IGoldenFlowerToken {
 
 /**
  * @title GoldenFlower
- * @notice 三人场和五人场炸金花链上资金托管合约。
+ * @notice 五人房炸金花链上资金托管合约。
  *
  * 新版本职责边界：
  * 1. 链上只负责玩家进入房间时托管房间上限金额。
@@ -28,8 +28,8 @@ interface IGoldenFlowerToken {
  * 4. 如果房间未完成或需要取消，dealer 可调用 refundRoom 原路退还已加入玩家的托管金额。
  *
  * 房间档位：
- * roomId  1-10 : 3 人场 | 入场费 200（2.00 USDT）
- * roomId 11-20 : 5 人场 | 入场费 400（4.00 USDT）
+ * roomId  1-10 : 五人房 | 入场费 200（2.00 USDT）
+ * roomId 11-20 : 五人房 | 入场费 400（4.00 USDT）
  */
 contract GoldenFlower is PancakeV2UsdtQuote {
 
@@ -69,10 +69,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
         // 链下积分单位，与当前房型入场费保持一致。
         uint256 betUnit;
 
-        // 玩家入房时一次性托管的金额：3 人房 2.00 USDT，5 人房 4.00 USDT。
+        // 玩家入房时一次性托管的金额：1-10号房2.00 USDT，11-20号房4.00 USDT。
         uint256 maxDeposit;
 
-        // 房间满员人数，仅允许 3 或 5。
+        // 房间满员人数，固定为5人。
         uint256 playerCapacity;
     }
 
@@ -213,7 +213,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      *
      * values 索引含义：
      * [0..4] = 五个座位的实际押注（USDT 美分），必须和 getRoomInfo 返回的 addrs 对齐；
-     *          3 人房的 [3]、[4] 固定补 0。
+     *          五人房使用全部五个下注积分槽位。
      * [5] = directCount，直推奖励地址数量
      * [6] = indirectCount，间推奖励地址数量
      * [7..] = 先放 directCount 个直推 USDT 美分金额，再放 indirectCount 个间推 USDT 美分金额
@@ -322,8 +322,8 @@ contract GoldenFlower is PancakeV2UsdtQuote {
      * [0] = player0，第 1 个加入的玩家
      * [1] = player1，第 2 个加入的玩家
      * [2] = player2，第 3 个加入的玩家
-     * [3] = player3，第 4 个加入的玩家，仅 5 人房使用
-     * [4] = player4，第 5 个加入的玩家，仅 5 人房使用
+     * [3] = player3，第 4 个加入的玩家
+     * [4] = player4，第 5 个加入的玩家
      */
     function getRoomInfo(uint256 roomId)
     external
@@ -424,7 +424,7 @@ contract GoldenFlower is PancakeV2UsdtQuote {
 
     /**
      * @dev 验证结算数组。values[0..4] 固定对应五个座位的押注，
-     *      3 人房的 values[3]、values[4] 必须补 0；values[5]、values[6]
+     *      五人房 values[0..4] 分别对应五个玩家的下注积分；values[5]、values[6]
      *      分别为直推和间推收款地址数量，values[7..] 为对应奖励金额。
      */
     function _validateSettlementParams(
