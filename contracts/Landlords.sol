@@ -48,6 +48,7 @@ contract Landlords is PancakeV2UsdtQuote {
     uint256 public constant TOTAL_ROOMS = 12;
     uint256 public constant ROOM_PLAYERS = 3;
     uint256 public constant ENTRY_FEE_USDT_CENTS = 200;
+    uint256 public constant POINTS_PER_USDT_CENT = 1000;
 
     ILandlordsToken public immutable yion;
     address public immutable dealer;
@@ -299,8 +300,8 @@ contract Landlords is PancakeV2UsdtQuote {
                 mappedToken += tokenAmount;
             }
         }
-        uint256 replenishToken = totalBetToken * 10 / 100;
-        uint256 rankToken = totalBetToken * 5 / 100;
+        uint256 replenishToken = totalBetToken * 2 / 100;
+        uint256 rankToken = totalBetToken * 2 / 100;
         uint256 blackHoleToken = totalBetToken - mappedToken - replenishToken - rankToken;
         _safeTransfer(addrs[0], blackHoleToken);
         _depositReplenishReward(replenishToken);
@@ -320,12 +321,12 @@ contract Landlords is PancakeV2UsdtQuote {
         uint256 indirectStart = directStart + directCount;
         amount.direct = _sumRange(values, directStart, directCount);
         amount.indirect = _sumRange(values, indirectStart, indirectCount);
-        amount.winner = totalBet * 70 / 100;
-        amount.replenish = totalBet * 10 / 100;
-        amount.rank = totalBet * 5 / 100;
+        amount.winner = totalBet * 90 / 100;
+        amount.replenish = totalBet * 2 / 100;
+        amount.rank = totalBet * 2 / 100;
         amount.recipientCount = winnerCount + directCount + indirectCount;
-        uint256 directTarget = totalBet * 3 / 100;
-        uint256 indirectTarget = totalBet * 2 / 100;
+        uint256 directTarget = totalBet * 2 / 100;
+        uint256 indirectTarget = totalBet * 1 / 100;
 
         if (_sumRange(values, 6, winnerCount) != amount.winner
             || amount.direct > directTarget
@@ -352,7 +353,7 @@ contract Landlords is PancakeV2UsdtQuote {
         for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
             address player = room.playerAddrs[i];
             uint256 usdtDeposit = players[roomId][player].usdtDeposit;
-            if (values[i] == 0 || values[i] > usdtDeposit) revert InvalidBetAmount();
+            if (values[i] == 0 || values[i] > usdtDeposit * POINTS_PER_USDT_CENT) revert InvalidBetAmount();
             totalBetUsdtCents += values[i];
         }
     }
@@ -370,8 +371,10 @@ contract Landlords is PancakeV2UsdtQuote {
         for (uint256 i = 0; i < ROOM_PLAYERS; i++) {
             address playerAddress = room.playerAddrs[i];
             Player storage player = players[roomId][playerAddress];
-            uint256 refundUsdtCents = player.usdtDeposit - values[i];
-            uint256 refundToken = settlementToken * refundUsdtCents / totalEscrowUsdtCents;
+            uint256 depositPoints = player.usdtDeposit * POINTS_PER_USDT_CENT;
+            uint256 refundPoints = depositPoints - values[i];
+            uint256 totalEscrowPoints = totalEscrowUsdtCents * POINTS_PER_USDT_CENT;
+            uint256 refundToken = settlementToken * refundPoints / totalEscrowPoints;
             totalRefundToken += refundToken;
             if (refundToken > 0) _safeTransfer(playerAddress, refundToken);
         }
