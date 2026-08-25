@@ -177,8 +177,9 @@ contract Landlords is PancakeV2UsdtQuote {
         SettlementAmounts memory amount = _calculateSettlement(values, totalBetUsdtCents);
         uint256 totalEscrowUsdtCents = _roomUsdtEscrow(roomId);
         uint256 quotedTokenRequired = _quoteTokenAmount(totalEscrowUsdtCents);
-        bool usdtMode = quotedTokenRequired <= room.escrow;
-        uint256 settlementToken = usdtMode ? quotedTokenRequired : room.escrow;
+        // 结算使用入场时实际锁定的 token 总额，避免结算时价格变化造成差额滞留。
+        bool usdtMode = false;
+        uint256 settlementToken = room.escrow;
         uint256 totalPaidToken = _executeSettlement(
             roomId,
             addrs,
