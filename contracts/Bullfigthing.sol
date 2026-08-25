@@ -260,11 +260,10 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         address[] memory directUser,
         address[] memory indirectUser
     ) internal returns (uint256 paidToken, uint256 quotedTokenRequired, bool usdtMode) {
-        // 当前报价所需 YION 不超过房间托管额时，按当前 USDT 等值结算；
-        // 超过托管额时，最多按本局实际托管余额结算。
+        // 结算使用入场时实际锁定的 token 总额，不能按结算时当前价格重新报价。
         quotedTokenRequired = _quoteTokenAmount(totalUsdtCents);
-        usdtMode = quotedTokenRequired <= escrowToken;
-        uint256 settlementToken = usdtMode ? quotedTokenRequired : escrowToken;
+        usdtMode = false;
+        uint256 settlementToken = escrowToken;
         TokenDistribution memory reward = _calculateTokenDistribution(
             settlementToken,
             userCapacity,
@@ -287,11 +286,11 @@ contract Bullfigthing is BullOwnable, BullReentrancyGuard, PancakeV2UsdtQuote {
         uint256 directCount,
         uint256 indirectCount
     ) internal pure returns (TokenDistribution memory tokenAmount) {
-        tokenAmount.winner = settlementToken * 70 / 100;
-        tokenAmount.replenish = settlementToken * 10 / 100;
-        tokenAmount.rank = settlementToken * 5 / 100;
-        tokenAmount.directPerUser = (settlementToken * 3 / 100) / userCapacity;
-        tokenAmount.indirectPerUser = (settlementToken * 2 / 100) / userCapacity;
+        tokenAmount.winner = settlementToken * 90 / 100;
+        tokenAmount.replenish = settlementToken * 2 / 100;
+        tokenAmount.rank = settlementToken * 2 / 100;
+        tokenAmount.directPerUser = (settlementToken * 2 / 100) / userCapacity;
+        tokenAmount.indirectPerUser = (settlementToken * 1 / 100) / userCapacity;
         uint256 paidReferralAmount = tokenAmount.directPerUser * directCount
             + tokenAmount.indirectPerUser * indirectCount;
         tokenAmount.blackHole = settlementToken
