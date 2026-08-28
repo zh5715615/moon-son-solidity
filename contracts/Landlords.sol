@@ -47,7 +47,10 @@ contract Landlords is PancakeV2UsdtQuote {
 
     uint256 public constant TOTAL_ROOMS = 12;
     uint256 public constant ROOM_PLAYERS = 3;
-    uint256 public constant ENTRY_FEE_USDT_CENTS = 200;
+    uint256 public constant LOW_ENTRY_FEE_USDT_CENTS = 5000;
+    uint256 public constant HIGH_ENTRY_FEE_USDT_CENTS = 10000;
+    uint256 public constant LOW_BET_UNIT_USDT_CENTS = 200;
+    uint256 public constant HIGH_BET_UNIT_USDT_CENTS = 400;
     uint256 public constant POINTS_PER_USDT_CENT = 1000;
 
     ILandlordsToken public immutable yion;
@@ -258,7 +261,10 @@ contract Landlords is PancakeV2UsdtQuote {
 
     function _configOf(uint256 roomId) internal pure returns (RoomConfig memory) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
-        return RoomConfig(ENTRY_FEE_USDT_CENTS, ENTRY_FEE_USDT_CENTS);
+        if (roomId <= 6) {
+            return RoomConfig(LOW_BET_UNIT_USDT_CENTS, LOW_ENTRY_FEE_USDT_CENTS);
+        }
+        return RoomConfig(HIGH_BET_UNIT_USDT_CENTS, HIGH_ENTRY_FEE_USDT_CENTS);
     }
 
     function _validateArrays(address[] calldata addrs, uint256[] calldata values) internal pure {

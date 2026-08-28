@@ -55,8 +55,10 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     error TokenTransferFailed();
 
     uint256 public constant TOTAL_ROOMS = 20;
-    uint256 public constant FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS = 200;
-    uint256 public constant FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS = 400;
+    uint256 public constant FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS = 20000;
+    uint256 public constant FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS = 40000;
+    uint256 public constant FIVE_PLAYER_LOW_BET_UNIT_USDT_CENTS = 100;
+    uint256 public constant FIVE_PLAYER_HIGH_BET_UNIT_USDT_CENTS = 200;
     uint256 public constant POINTS_PER_USDT_CENT = 1000;
     IGoldenFlowerToken public immutable yion;
     address public immutable dealer;
@@ -159,11 +161,12 @@ contract GoldenFlower is PancakeV2UsdtQuote {
     function _configOf(uint256 roomId) internal pure returns (RoomConfig memory cfg) {
         if (roomId < 1 || roomId > TOTAL_ROOMS) revert InvalidRoomId();
         uint256 playerCapacity = 5;
-        uint256 entryFee = roomId <= 10
+        bool lowRoom = roomId <= 10;
+        uint256 entryFee = lowRoom
             ? FIVE_PLAYER_LOW_ENTRY_FEE_USDT_CENTS
             : FIVE_PLAYER_HIGH_ENTRY_FEE_USDT_CENTS;
         cfg = RoomConfig({
-            betUnit: entryFee,
+            betUnit: lowRoom ? FIVE_PLAYER_LOW_BET_UNIT_USDT_CENTS : FIVE_PLAYER_HIGH_BET_UNIT_USDT_CENTS,
             maxDeposit: entryFee,
             playerCapacity: playerCapacity
         });
