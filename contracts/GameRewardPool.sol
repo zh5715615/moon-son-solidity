@@ -39,7 +39,7 @@ contract GameRewardPool is ReentrancyGuard {
     IERC20 public immutable yion;
     address public owner;
 
-    // 用户奖励记录。owner 只累加记录，用户自己提现。
+    // 用户奖励记录。owner 每日覆盖未领取奖励，用户自己提现。
     mapping(address => UserInfo) userReward;
 
     // 日结排名奖池剩余未分配余额。
@@ -107,7 +107,8 @@ contract GameRewardPool is ReentrancyGuard {
 
         rankPoolBalance -= totalAmount;
         for (uint256 i = 0; i < users.length; i++) {
-            userReward[users[i]].rankReward += amounts[i];
+            // 每日奖励覆盖前一天未领取的奖励，不跨日累加
+            userReward[users[i]].rankReward = amounts[i];
         }
 
         emit RankRewardRecorded(msg.sender, totalAmount);
@@ -125,7 +126,8 @@ contract GameRewardPool is ReentrancyGuard {
 
         replenishPoolBalance -= totalAmount;
         for (uint256 i = 0; i < users.length; i++) {
-            userReward[users[i]].replenishReward += amounts[i];
+            // 每日奖励覆盖前一天未领取的奖励，不跨日累加
+            userReward[users[i]].replenishReward = amounts[i];
         }
 
         emit ReplenishRewardRecorded(msg.sender, totalAmount);

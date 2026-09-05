@@ -828,6 +828,123 @@
       },
       "gasUsed": 2266804,
       "status": "success"
+    },
+    {
+      "contract": "Bullfigthing",
+      "address": "0xF1C05c2b7158C235E47bb3bdE97ED12A3f5C9B14",
+      "transactionHash": "0x2a353415cd122661095652c252c090c065c07f5188f1370b78876fd99196ccad",
+      "blockNumber": 127636709,
+      "blockTimestamp": 1787882968,
+      "deployedAtUtc": "2026-08-28T02:09:28.000Z",
+      "deployedAtAsiaShanghai": "2026-08-28 10:09:28 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "beneficiary": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0xBAdc6043bA10ECA235caD91920BcB4c0a5e06848",
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F"
+      },
+      "gasUsed": 3581801,
+      "status": "success"
+    },
+    {
+      "contract": "GoldenFlower",
+      "address": "0x22fE21E293c4cD16523b0Db3403074a6Ac1e4c24",
+      "transactionHash": "0x64f115fdf878c7352562f3c91ea2b62a8e115eed0e9c998328e8ed886d7e1a40",
+      "blockNumber": 127636745,
+      "blockTimestamp": 1787882984,
+      "deployedAtUtc": "2026-08-28T02:09:44.000Z",
+      "deployedAtAsiaShanghai": "2026-08-28 10:09:44 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0xBAdc6043bA10ECA235caD91920BcB4c0a5e06848"
+      },
+      "gasUsed": 2442089,
+      "status": "success"
+    },
+    {
+      "contract": "Landlords",
+      "address": "0xc2A5e41e3f93bFb8Efe09E5d6CE9D9BFc4317e5C",
+      "transactionHash": "0xdc56984bc1cd64a852287679926671e2b846e1fca67a9c1a3305ec2331b61906",
+      "blockNumber": 127636777,
+      "blockTimestamp": 1787882998,
+      "deployedAtUtc": "2026-08-28T02:09:58.000Z",
+      "deployedAtAsiaShanghai": "2026-08-28 10:09:58 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0xBAdc6043bA10ECA235caD91920BcB4c0a5e06848"
+      },
+      "gasUsed": 2288035,
+      "status": "success"
+    },
+    {
+      "contract": "GameRewardPool",
+      "address": "0x88a61B04cfceFa8961d82DABdCf6D0262F287aE3",
+      "transactionHash": "0x8e325d285f010d6cd4622e5de31c14170e8db9aead2adc2942dbab2fc4c8a03a",
+      "blockNumber": 129078799,
+      "blockTimestamp": 1788531968,
+      "deployedAtUtc": "2026-09-04T14:26:08.000Z",
+      "deployedAtAsiaShanghai": "2026-09-04 22:26:08 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F"
+      },
+      "gasUsed": 877306,
+      "status": "success"
+    },
+    {
+      "contract": "Bullfigthing",
+      "address": "0xa98989490684339A80F3073a24A233C43e57389c",
+      "transactionHash": "0xd072333bd0c106320d9aa25179843627841cf2ca0803dd50ff564fe90d176218",
+      "blockNumber": 129078819,
+      "blockTimestamp": 1788531977,
+      "deployedAtUtc": "2026-09-04T14:26:17.000Z",
+      "deployedAtAsiaShanghai": "2026-09-04 22:26:17 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "beneficiary": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x88a61B04cfceFa8961d82DABdCf6D0262F287aE3",
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F"
+      },
+      "gasUsed": 3581801,
+      "status": "success"
+    },
+    {
+      "contract": "GoldenFlower",
+      "address": "0x5e5a2cb4Bd7aC62B795bbc5D6dfDf369aBdB1b0E",
+      "transactionHash": "0x0d2e23d242190547036d5fb99f0ff487cb3253ce9dbfb67364d6d6ff889b283a",
+      "blockNumber": 129078844,
+      "blockTimestamp": 1788531988,
+      "deployedAtUtc": "2026-09-04T14:26:28.000Z",
+      "deployedAtAsiaShanghai": "2026-09-04 22:26:28 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x88a61B04cfceFa8961d82DABdCf6D0262F287aE3"
+      },
+      "gasUsed": 2442089,
+      "status": "success"
+    },
+    {
+      "contract": "Landlords",
+      "address": "0x3A8515B24Db3a91dE60AD4e2d6081B95BeEcC506",
+      "transactionHash": "0x41aabb2ca385323280e54e9e08c1f18a5321dcaf20191e50029cb13b72287ffa",
+      "blockNumber": 129078869,
+      "blockTimestamp": 1788531999,
+      "deployedAtUtc": "2026-09-04T14:26:39.000Z",
+      "deployedAtAsiaShanghai": "2026-09-04 22:26:39 +08:00",
+      "deployer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+      "constructorArguments": {
+        "yion": "0x99c39A58652Ba56004eA205524eb23a33Ebe7F1F",
+        "dealer": "0x7c92cd77d3fbA3ea33f7D94254bf3E23B25513C2",
+        "rewardPool": "0x88a61B04cfceFa8961d82DABdCf6D0262F287aE3"
+      },
+      "gasUsed": 2288035,
+      "status": "success"
     }
   ],
   "liquidityPools": [
